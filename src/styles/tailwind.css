@@ -1,0 +1,11 @@
+@import 'tailwindcss';
+
+/* Mobile-friendly touch improvements */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  touch-action: manipulation;
+}

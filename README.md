@@ -1,1 +1,11 @@
-# repo-template
+
+  # Task Do
+
+  This is a code bundle for Task Do. The original project is available at https://www.figma.com/design/4nJrojGdMZSmlmZTxvKZdL/Task-Do.
+
+  ## Running the code
+
+  Run `npm i` to install the dependencies.
+
+  Run `npm run dev` to start the development server.
+  
