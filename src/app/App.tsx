@@ -12,6 +12,163 @@ function AppContent() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentScreen, setCurrentScreen] = useState<'home' | 'add' | 'edit' | 'notifications'>('home');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [alarmingTask, setAlarmingTask] = useState<Task | null>(null);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [alarmInterval, setAlarmInterval] = useState<number | null>(null);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then((permission) => {
+          setNotificationPermission(permission);
+        });
+      }
+    }
+  }, []);
+
+  // Check for alarms every minute
+  useEffect(() => {
+    const checkAlarms = () => {
+      const now = new Date();
+      
+      tasks.forEach((task) => {
+        if (
+          !task.completed &&
+          task.notificationEnabled &&
+          task.alarmTime
+        ) {
+          const alarmTime = new Date(task.alarmTime);
+          const timeDiff = alarmTime.getTime() - now.getTime();
+          
+          // Trigger if alarm is within the last minute (to avoid missing it)
+          if (timeDiff <= 60000 && timeDiff > 0) {
+            triggerAlarm(task);
+          }
+        }
+      });
+    };
+
+    // Check immediately
+    checkAlarms();
+
+    // Then check every 30 seconds
+    const interval = setInterval(checkAlarms, 30000);
+
+    return () => clearInterval(interval);
+  }, [tasks]);
+
+  const triggerAlarm = (task: Task) => {
+    // Don't trigger if already alarming
+    if (alarmingTask) return;
+
+    // Set the alarming task to show modal
+    setAlarmingTask(task);
+
+    // Show browser notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification('Task Do - Reminder', {
+        body: `${task.name}\n${task.description || 'No description'}`,
+        icon: '/favicon.ico',
+        tag: task.id,
+        requireInteraction: true,
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    }
+
+    // Start playing continuous alarm sound
+    startAlarmSound();
+  };
+
+  const startAlarmSound = () => {
+    try {
+      const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+      setAudioContext(context);
+
+      // Play the soothing alarm melody repeatedly
+      const playMelody = () => {
+        // Soothing melody notes (C major scale pleasant pattern)
+        const notes = [523.25, 659.25, 783.99, 659.25]; // C5, E5, G5, E5
+        const noteDuration = 0.4;
+        const noteGap = 0.1;
+        let time = context.currentTime;
+
+        notes.forEach((frequency, index) => {
+          const oscillator = context.createOscillator();
+          const gainNode = context.createGain();
+
+          oscillator.connect(gainNode);
+          gainNode.connect(context.destination);
+
+          oscillator.frequency.value = frequency;
+          oscillator.type = 'sine';
+
+          // Envelope for smooth sound
+          gainNode.gain.setValueAtTime(0, time);
+          gainNode.gain.linearRampToValueAtTime(0.6, time + 0.05); // Loud and clear
+          gainNode.gain.linearRampToValueAtTime(0.5, time + noteDuration - 0.1);
+          gainNode.gain.linearRampToValueAtTime(0, time + noteDuration);
+
+          oscillator.start(time);
+          oscillator.stop(time + noteDuration);
+
+          time += noteDuration + noteGap;
+        });
+      };
+
+      // Play melody immediately
+      playMelody();
+
+      // Repeat every 2 seconds
+      const interval = window.setInterval(() => {
+        playMelody();
+      }, 2000);
+
+      setAlarmInterval(interval);
+    } catch (error) {
+      console.log('Audio alert not available');
+    }
+  };
+
+  const stopAlarmSound = () => {
+    if (alarmInterval) {
+      clearInterval(alarmInterval);
+      setAlarmInterval(null);
+    }
+    if (audioContext) {
+      audioContext.close();
+      setAudioContext(null);
+    }
+  };
+
+  const dismissAlarm = () => {
+    stopAlarmSound();
+    setAlarmingTask(null);
+  };
+
+  const snoozeAlarm = () => {
+    stopAlarmSound();
+    
+    // Snooze for 5 minutes
+    if (alarmingTask) {
+      const newAlarmTime = new Date(Date.now() + 5 * 60 * 1000);
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === alarmingTask.id
+            ? { ...task, alarmTime: newAlarmTime }
+            : task
+        )
+      );
+    }
+    
+    setAlarmingTask(null);
+  };
 
   // Sort tasks: Primary by priority (high > medium > low), Secondary by deadline (earliest first)
   const sortedTasks = [...tasks].sort((a, b) => {
@@ -281,6 +438,64 @@ function AppContent() {
           onClose={() => setCurrentScreen('home')}
           onToggleNotification={handleToggleNotification}
         />
+      )}
+
+      {/* Alarm Modal */}
+      {alarmingTask && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 animate-pulse">
+          <div className="bg-background rounded-3xl p-8 max-w-sm w-full shadow-2xl border-4 border-red-500 animate-in fade-in zoom-in duration-300">
+            {/* Animated Bell Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="absolute inset-0 bg-red-500/20 rounded-full animate-ping"></div>
+                <div className="relative bg-red-500 p-6 rounded-full">
+                  <Bell className="w-12 h-12 text-white animate-bounce" />
+                </div>
+              </div>
+            </div>
+
+            {/* Task Info */}
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold mb-2">Task Reminder!</h2>
+              <h3 className="text-xl font-semibold mb-3 text-red-500">
+                {alarmingTask.name}
+              </h3>
+              {alarmingTask.description && (
+                <p className="text-muted-foreground mb-4">
+                  {alarmingTask.description}
+                </p>
+              )}
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Bell className="w-4 h-4" />
+                <span>
+                  {new Date(alarmingTask.alarmTime).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <Button
+                className="w-full h-12"
+                onClick={dismissAlarm}
+                size="lg"
+              >
+                Dismiss Alarm
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full h-12"
+                onClick={snoozeAlarm}
+                size="lg"
+              >
+                Snooze (5 min)
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
