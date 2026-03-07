@@ -7,6 +7,37 @@ import { AddEditTaskScreen } from './components/AddEditTaskScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { useTheme } from 'next-themes';
 
+// localStorage key for tasks
+const TASKS_STORAGE_KEY = 'tasks';
+
+// Helper functions for localStorage
+const loadTasksFromLocalStorage = (): Task[] => {
+  try {
+    const tasksJson = localStorage.getItem(TASKS_STORAGE_KEY);
+    if (!tasksJson) {
+      return [];
+    }
+    const tasks = JSON.parse(tasksJson);
+    // Convert date strings back to Date objects
+    return tasks.map((task: any) => ({
+      ...task,
+      deadline: new Date(task.deadline),
+      alarmTime: new Date(task.alarmTime),
+    }));
+  } catch (error) {
+    console.error('Error loading tasks from localStorage:', error);
+    return [];
+  }
+};
+
+const saveTasksToLocalStorage = (tasks: Task[]) => {
+  try {
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
+  } catch (error) {
+    console.error('Error saving tasks to localStorage:', error);
+  }
+};
+
 function AppContent() {
   const { theme, setTheme } = useTheme();
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -16,6 +47,19 @@ function AppContent() {
   const [alarmingTask, setAlarmingTask] = useState<Task | null>(null);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [alarmInterval, setAlarmInterval] = useState<number | null>(null);
+
+  // Load tasks from localStorage on mount
+  useEffect(() => {
+    const storedTasks = loadTasksFromLocalStorage();
+    setTasks(storedTasks);
+  }, []);
+
+  // Save tasks to localStorage whenever they change
+  useEffect(() => {
+    if (tasks.length > 0 || localStorage.getItem(TASKS_STORAGE_KEY)) {
+      saveTasksToLocalStorage(tasks);
+    }
+  }, [tasks]);
 
   // Request notification permission on mount
   useEffect(() => {
