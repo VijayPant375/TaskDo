@@ -17,6 +17,7 @@ for (const key of requiredEnv) {
 
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
+const host = process.env.HOST ?? '0.0.0.0';
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -219,6 +220,6 @@ app.get('*', (request, response, next) => {
   response.sendFile(path.join(frontendDistDirectory, 'index.html'));
 });
 
-app.listen(port, () => {
-  console.log(`TaskDo Stripe server listening on http://localhost:${port}`);
+app.listen(port, host, () => {
+  console.log(`TaskDo Stripe server listening on http://${host}:${port}`);
 });
