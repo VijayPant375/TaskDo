@@ -1,0 +1,15 @@
+.env
+server/.env
+node_modules/
+dist/
+server/node_modules/
+src/app/App.new.tsx
+src/app/App.copy.tsx
+/App.tsx
+/PremiumBadge.tsx
+/SettingsScreen.tsx
+/SubscriptionContext.tsx
+/SuccessPage.tsx
+/UpgradeModal.tsx
+/stripe.ts
+/subscription.ts
