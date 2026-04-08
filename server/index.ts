@@ -21,7 +21,7 @@ const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 const currentFilePath = fileURLToPath(import.meta.url);
 const serverDirectory = path.dirname(currentFilePath);
-const frontendDistDirectory = path.resolve(serverDirectory, '..', 'dist');
+const frontendDistDirectory = path.resolve(serverDirectory, '..', '..', 'dist');
 
 function getSubscriptionPayload(subscription: Stripe.Subscription) {
   const status = subscription.status;

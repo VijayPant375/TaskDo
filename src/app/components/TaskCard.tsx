@@ -57,7 +57,7 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
     <div
       className={`group rounded-[1.35rem] border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${
         task.completed ? 'opacity-60' : ''
-      }`}
+      } cursor-pointer`}
       style={{
         background:
           'color-mix(in srgb, var(--card) 90%, transparent)',

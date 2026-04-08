@@ -78,7 +78,7 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
             <button
               className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
                 billingPeriod === 'monthly' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
-              }`}
+              } cursor-pointer`}
               onClick={() => setBillingPeriod('monthly')}
               type="button"
             >
@@ -87,7 +87,7 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
             <button
               className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
                 isYearly ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
-              }`}
+              } cursor-pointer`}
               onClick={() => setBillingPeriod('yearly')}
               type="button"
             >

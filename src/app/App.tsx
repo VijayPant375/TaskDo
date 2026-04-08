@@ -457,9 +457,14 @@ function AppContent() {
 
               {activeTasks.length === 0 ? (
                 <div className="surface-panel rounded-[1.75rem] border px-4 py-12 text-center shadow-sm sm:px-6">
-                  <div className="mb-4 inline-flex rounded-full bg-muted p-4">
+                  <button
+                    type="button"
+                    onClick={handleAddTask}
+                    className="mb-4 inline-flex rounded-full bg-muted p-4 transition hover:scale-105 hover:bg-muted/80"
+                    aria-label="Add task"
+                  >
                     <Plus className="h-8 w-8 text-muted-foreground" />
-                  </div>
+                  </button>
                   <h3 className="mb-2 font-semibold">No tasks yet</h3>
                   <p className="mx-auto max-w-sm text-sm leading-6 text-muted-foreground">
                     Keep the list light. Add your next task only when it deserves attention.
