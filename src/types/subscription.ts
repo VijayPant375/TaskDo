@@ -49,7 +49,7 @@ export const PRICING = {
     label: 'Monthly',
   },
   yearly: {
-    amount: 49,
+    amount: 49.99,
     priceId: import.meta.env.VITE_STRIPE_YEARLY_PRICE_ID ?? '',
     label: 'Yearly',
     savingsLabel: 'Save 18%',

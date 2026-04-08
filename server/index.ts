@@ -18,6 +18,23 @@ const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
+function getSubscriptionPayload(subscription: Stripe.Subscription) {
+  const status = subscription.status;
+  const isPremium = status === 'active' || status === 'trialing';
+
+  return {
+    billingPeriod:
+      subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly',
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    currentPeriodEnd: subscription.items.data[0]?.current_period_end ?? null,
+    customerId:
+      typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id,
+    isPremium,
+    status,
+    subscriptionId: subscription.id,
+  };
+}
+
 app.post('/api/webhook', express.raw({ type: 'application/json' }), (request, response) => {
   const signature = request.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -136,16 +153,27 @@ app.post('/api/verify-subscription', async (request, response) => {
         ? await stripe.subscriptions.retrieve(session.subscription)
         : session.subscription;
 
-    response.json({
-      billingPeriod: subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly',
-      cancelAtPeriodEnd: subscription.cancel_at_period_end,
-      currentPeriodEnd: subscription.items.data[0]?.current_period_end ?? null,
-      customerId: typeof session.customer === 'string' ? session.customer : session.customer.id,
-      subscriptionId: subscription.id,
-    });
+    response.json(getSubscriptionPayload(subscription));
   } catch (error) {
     console.error('Failed to verify Stripe subscription.', error);
     response.status(500).send('Unable to verify subscription.');
+  }
+});
+
+app.post('/api/subscription-status', async (request, response) => {
+  try {
+    const { subscriptionId } = request.body as { subscriptionId?: string };
+
+    if (!subscriptionId) {
+      response.status(400).send('subscriptionId is required.');
+      return;
+    }
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    response.json(getSubscriptionPayload(subscription));
+  } catch (error) {
+    console.error('Failed to fetch Stripe subscription status.', error);
+    response.status(500).send('Unable to fetch subscription status.');
   }
 });
 

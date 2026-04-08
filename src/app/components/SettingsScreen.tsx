@@ -43,7 +43,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
       <div className="mx-auto min-h-screen max-w-2xl px-4 py-6">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Settings</h1>
             <p className="text-sm text-muted-foreground">Manage your plan and app details.</p>
@@ -54,7 +54,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
         </div>
 
         <div className="space-y-4">
-          <section className="rounded-3xl border bg-card p-6">
+          <section className="rounded-3xl border bg-card p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
                 <div className={`rounded-2xl p-3 ${isPremium ? 'bg-amber-500 text-white' : 'bg-muted text-muted-foreground'}`}>
@@ -72,12 +72,19 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
               </div>
             </div>
 
-            <div className="mt-6 rounded-2xl bg-muted/50 p-4">
-              <p className="text-sm font-medium">Active task count</p>
-              <p className="mt-1 text-3xl font-bold">
-                {activeTaskCount}
-                {!isPremium ? <span className="text-lg text-muted-foreground"> / {FREE_TASK_LIMIT}</span> : null}
-              </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-muted/50 p-4">
+                <p className="text-sm font-medium">Active task count</p>
+                <p className="mt-1 text-3xl font-bold">
+                  {activeTaskCount}
+                  {!isPremium ? <span className="text-lg text-muted-foreground"> / {FREE_TASK_LIMIT}</span> : null}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                <p className="text-sm font-medium">Premium pricing</p>
+                <p className="mt-1 text-lg font-semibold">$4.99 monthly</p>
+                <p className="text-sm text-muted-foreground">$49.99 yearly</p>
+              </div>
             </div>
 
             {isPremium ? (
@@ -113,7 +120,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
             )}
           </section>
 
-          <section className="rounded-3xl border bg-card p-6">
+          <section className="rounded-3xl border bg-card p-5 sm:p-6">
             <h2 className="text-lg font-semibold">About TaskDo</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               TaskDo is a lightweight task manager with reminders, priorities, and a new freemium subscription flow.

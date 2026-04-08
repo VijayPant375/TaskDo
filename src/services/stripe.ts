@@ -18,6 +18,16 @@ interface PortalSessionResponse {
   url: string;
 }
 
+export interface SubscriptionStatusResponse {
+  billingPeriod: BillingPeriod | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: number | null;
+  customerId: string;
+  isPremium: boolean;
+  status: string;
+  subscriptionId: string;
+}
+
 async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse> {
   const response = await fetch(`${API_URL}${path}`, {
     method: 'POST',
@@ -63,4 +73,8 @@ export async function openCustomerPortal(customerId: string) {
   });
 
   window.location.assign(session.url);
+}
+
+export function fetchSubscriptionStatus(subscriptionId: string) {
+  return postJson<SubscriptionStatusResponse>('/api/subscription-status', { subscriptionId });
 }

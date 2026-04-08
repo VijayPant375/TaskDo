@@ -38,6 +38,7 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
 
   const copy = getCopy(trigger, featureName);
   const isYearly = billingPeriod === 'yearly';
+  const monthlyEquivalent = isYearly ? (PRICING.yearly.amount / 12).toFixed(2) : PRICING.monthly.amount.toFixed(2);
 
   const handleUpgrade = async () => {
     setError(null);
@@ -54,16 +55,16 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl rounded-3xl border bg-background shadow-2xl">
-        <div className="border-b p-6">
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border bg-background shadow-2xl">
+        <div className="border-b p-4 sm:p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
               <div className="rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 p-3 text-white">
                 <Zap className="h-6 w-6" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold">{copy.title}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{copy.subtitle}</p>
+                <h2 className="text-xl font-bold sm:text-2xl">{copy.title}</h2>
+                <p className="mt-1 max-w-xl text-sm text-muted-foreground">{copy.subtitle}</p>
               </div>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose}>
@@ -72,11 +73,11 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
           </div>
         </div>
 
-        <div className="space-y-6 p-6">
-          <div className="mx-auto flex w-fit items-center gap-2 rounded-2xl bg-muted p-1">
+        <div className="space-y-5 overflow-y-auto p-4 sm:p-6">
+          <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-2 rounded-2xl bg-muted p-1">
             <button
-              className={`rounded-xl px-5 py-2 text-sm font-medium transition ${
-                billingPeriod === 'monthly' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+              className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                billingPeriod === 'monthly' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
               }`}
               onClick={() => setBillingPeriod('monthly')}
               type="button"
@@ -84,8 +85,8 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
               Monthly
             </button>
             <button
-              className={`rounded-xl px-5 py-2 text-sm font-medium transition ${
-                isYearly ? 'bg-background shadow-sm' : 'text-muted-foreground'
+              className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                isYearly ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
               }`}
               onClick={() => setBillingPeriod('yearly')}
               type="button"
@@ -94,18 +95,22 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
             </button>
           </div>
 
-          <div className="text-center">
-            <div className="flex items-baseline justify-center gap-1">
-              <span className="text-5xl font-bold">
-                ${isYearly ? (PRICING.yearly.amount / 12).toFixed(2) : PRICING.monthly.amount.toFixed(2)}
+          <div className="rounded-3xl bg-gradient-to-br from-amber-50 via-background to-orange-50 px-4 py-5 text-center dark:from-amber-500/10 dark:via-background dark:to-orange-500/10">
+            <div className="flex items-end justify-center gap-1">
+              <span className="text-4xl font-bold sm:text-5xl">
+                ${monthlyEquivalent}
               </span>
-              <span className="text-muted-foreground">/month</span>
+              <span className="pb-1 text-muted-foreground">/month</span>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
               {isYearly
                 ? `${PRICING.yearly.savingsLabel} with annual billing at $${PRICING.yearly.amount.toFixed(2)}`
                 : 'Billed monthly at $4.99'}
             </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-xs">
+              <span className="rounded-full bg-background px-3 py-1 text-muted-foreground shadow-sm">Unlimited active tasks</span>
+              <span className="rounded-full bg-background px-3 py-1 text-muted-foreground shadow-sm">Customer portal included</span>
+            </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
@@ -124,18 +129,20 @@ export function UpgradeModal({ featureName, onClose, trigger = 'manual' }: Upgra
             ))}
           </div>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 pb-1 pt-4 backdrop-blur sm:-mx-6 sm:px-6">
+            {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
 
-          <Button
-            className="h-12 w-full bg-gradient-to-r from-amber-500 to-orange-500 text-base hover:from-amber-600 hover:to-orange-600"
-            disabled={isSubmitting}
-            onClick={handleUpgrade}
-            size="lg"
-          >
-            {isSubmitting ? 'Opening checkout...' : 'Continue to Stripe Checkout'}
-          </Button>
+            <Button
+              className="h-12 w-full bg-gradient-to-r from-amber-500 to-orange-500 text-base hover:from-amber-600 hover:to-orange-600"
+              disabled={isSubmitting}
+              onClick={handleUpgrade}
+              size="lg"
+            >
+              {isSubmitting ? 'Opening checkout...' : `Start ${billingPeriod === 'yearly' ? 'yearly' : 'monthly'} plan`}
+            </Button>
 
-          <p className="text-center text-xs text-muted-foreground">Cancel anytime in the customer portal.</p>
+            <p className="mt-3 text-center text-xs text-muted-foreground">Cancel anytime in the customer portal.</p>
+          </div>
         </div>
       </div>
     </div>

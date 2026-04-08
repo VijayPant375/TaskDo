@@ -337,12 +337,12 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background">
       {currentScreen === 'home' && (
-        <div className="mx-auto max-w-md px-4 py-6 pb-24">
-          <div className="mb-8 flex items-center justify-between">
+        <div className="mx-auto max-w-md px-4 py-5 pb-24 sm:py-6">
+          <div className="mb-6 flex items-start justify-between gap-3">
             <div>
               <h1 className="text-3xl font-bold">Task Do</h1>
               {!isPremium ? (
-                <p className="mt-1 text-sm text-muted-foreground">Free plan with up to 50 active tasks</p>
+                <p className="mt-1 max-w-[13rem] text-sm text-muted-foreground">Free plan with up to 50 active tasks</p>
               ) : (
                 <div className="mt-2">
                   <PremiumBadge />
@@ -350,10 +350,10 @@ function AppContent() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               {!isPremium ? (
                 <Button
-                  className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+                  className="h-9 bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-xs hover:from-amber-600 hover:to-orange-600 sm:text-sm"
                   onClick={() => {
                     setUpgradeModalTrigger('manual');
                     setShowUpgradeModal(true);
@@ -391,7 +391,7 @@ function AppContent() {
 
           {!isPremium ? (
             <div className="mb-6 rounded-2xl border bg-card p-4">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm text-muted-foreground">Active tasks</p>
                   <p className="text-2xl font-bold">
@@ -400,6 +400,7 @@ function AppContent() {
                 </div>
 
                 <Button
+                  className="h-9 px-3"
                   onClick={() => {
                     setUpgradeModalTrigger(taskLimitReached ? 'task_limit' : 'manual');
                     setShowUpgradeModal(true);
@@ -411,7 +412,7 @@ function AppContent() {
               </div>
 
               {!taskLimitReached && activeTasks.length >= FREE_TASK_LIMIT - 10 ? (
-                <p className="mt-3 text-xs text-amber-600">
+                <p className="mt-3 text-xs leading-5 text-amber-600">
                   You are getting close to the free plan limit.
                 </p>
               ) : null}
@@ -535,14 +536,14 @@ function AppContent() {
 
           <Button
             size="lg"
-            className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg"
+            className="fixed bottom-5 right-5 h-14 w-14 rounded-full shadow-lg sm:bottom-6 sm:right-6"
             onClick={handleAddTask}
           >
             <Plus className="h-6 w-6" />
           </Button>
 
           {taskLimitReached ? (
-            <div className="fixed bottom-24 right-6 rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow-lg">
+            <div className="fixed bottom-24 right-4 max-w-[11rem] rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow-lg sm:right-6">
               Free limit reached
             </div>
           ) : null}

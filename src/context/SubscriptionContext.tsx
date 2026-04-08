@@ -1,10 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { fetchSubscriptionStatus } from '../services/stripe';
 import { FREE_TASK_LIMIT, type SubscriptionStatus } from '../types/subscription';
 
 interface SubscriptionContextValue {
   subscriptionStatus: SubscriptionStatus;
   isPremium: boolean;
+  isRefreshing: boolean;
   canCreateTask: (currentActiveTaskCount: number) => boolean;
+  refreshSubscription: () => Promise<void>;
   updateSubscription: (status: SubscriptionStatus) => void;
   clearSubscription: () => void;
 }
@@ -34,6 +37,30 @@ function readStoredSubscription(): SubscriptionStatus {
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>(defaultSubscription);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const syncSubscriptionFromStripe = async (subscriptionId: string) => {
+    setIsRefreshing(true);
+
+    try {
+      const latest = await fetchSubscriptionStatus(subscriptionId);
+
+      setSubscriptionStatus({
+        tier: latest.isPremium ? 'premium' : 'free',
+        stripeCustomerId: latest.customerId,
+        stripeSubscriptionId: latest.subscriptionId,
+        billingPeriod: latest.billingPeriod ?? undefined,
+        currentPeriodEnd: latest.currentPeriodEnd
+          ? new Date(latest.currentPeriodEnd * 1000).toISOString()
+          : undefined,
+        cancelAtPeriodEnd: latest.cancelAtPeriodEnd,
+      });
+    } catch (error) {
+      console.error('Failed to refresh subscription from Stripe.', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     setSubscriptionStatus(readStoredSubscription());
@@ -58,18 +85,55 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
+  useEffect(() => {
+    if (!subscriptionStatus.stripeSubscriptionId) {
+      return;
+    }
+
+    void syncSubscriptionFromStripe(subscriptionStatus.stripeSubscriptionId);
+  }, [subscriptionStatus.stripeSubscriptionId]);
+
+  useEffect(() => {
+    if (!subscriptionStatus.stripeSubscriptionId) {
+      return;
+    }
+
+    const refreshOnFocus = () => {
+      if (!document.hidden) {
+        void syncSubscriptionFromStripe(subscriptionStatus.stripeSubscriptionId as string);
+      }
+    };
+
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
+    };
+  }, [subscriptionStatus.stripeSubscriptionId]);
+
   const value = useMemo<SubscriptionContextValue>(() => {
     const isPremium = subscriptionStatus.tier === 'premium';
 
     return {
       subscriptionStatus,
       isPremium,
+      isRefreshing,
       canCreateTask: (currentActiveTaskCount: number) => {
         if (isPremium) {
           return true;
         }
 
         return currentActiveTaskCount < FREE_TASK_LIMIT;
+      },
+      refreshSubscription: async () => {
+        if (!subscriptionStatus.stripeSubscriptionId) {
+          setSubscriptionStatus(defaultSubscription);
+          return;
+        }
+
+        await syncSubscriptionFromStripe(subscriptionStatus.stripeSubscriptionId);
       },
       updateSubscription: (status: SubscriptionStatus) => {
         setSubscriptionStatus(status);
@@ -78,7 +142,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setSubscriptionStatus(defaultSubscription);
       },
     };
-  }, [subscriptionStatus]);
+  }, [isRefreshing, subscriptionStatus]);
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
 }
