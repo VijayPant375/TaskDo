@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express from 'express';
@@ -17,6 +19,9 @@ const app = express();
 const port = Number(process.env.PORT ?? 3001);
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const currentFilePath = fileURLToPath(import.meta.url);
+const serverDirectory = path.dirname(currentFilePath);
+const frontendDistDirectory = path.resolve(serverDirectory, '..', 'dist');
 
 function getSubscriptionPayload(subscription: Stripe.Subscription) {
   const status = subscription.status;
@@ -201,6 +206,17 @@ app.post('/api/create-portal-session', async (request, response) => {
     console.error('Failed to create Stripe customer portal session.', error);
     response.status(500).send('Unable to create portal session.');
   }
+});
+
+app.use(express.static(frontendDistDirectory));
+
+app.get('*', (request, response, next) => {
+  if (request.path.startsWith('/api/')) {
+    next();
+    return;
+  }
+
+  response.sendFile(path.join(frontendDistDirectory, 'index.html'));
 });
 
 app.listen(port, () => {

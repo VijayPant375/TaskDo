@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: taskdo
+    runtime: node
+    plan: free
+    buildCommand: npm run render:build
+    startCommand: npm run render:start
+    autoDeploy: true
