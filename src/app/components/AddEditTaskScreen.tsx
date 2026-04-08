@@ -76,61 +76,79 @@ export function AddEditTaskScreen({ task, onSave, onCancel }: AddEditTaskScreenP
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
-      <div className="min-h-screen px-4 py-6 max-w-md mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">{task ? 'Edit Task' : 'Add New Task'}</h1>
+      <div className="mx-auto min-h-screen max-w-2xl px-4 py-5 sm:py-8">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{task ? 'Edit Task' : 'Add New Task'}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Capture the essentials now and refine details later.
+            </p>
+          </div>
           <Button variant="ghost" size="icon" onClick={onCancel}>
             <X className="w-6 h-6" />
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="name">Task Name *</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter task name"
-              required
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="surface-panel space-y-6 rounded-[1.75rem] border p-4 shadow-sm sm:p-6">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="name">Task Name *</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter task name"
+                required
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Task Description</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter task description"
-              rows={3}
-            />
-          </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="description">Task Description</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add helpful details or leave it blank"
+                rows={4}
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="deadline">Deadline *</Label>
-            <Input
-              id="deadline"
-              type="datetime-local"
-              value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
-              required
-            />
+            <div className="space-y-2">
+              <Label htmlFor="deadline">Deadline *</Label>
+              <Input
+                id="deadline"
+                type="datetime-local"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="alarm">Alarm / Reminder Time *</Label>
+              <Input
+                id="alarm"
+                type="datetime-local"
+                value={alarmTime}
+                onChange={(e) => setAlarmTime(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
             <Label>Priority</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2.5">
               {priorityOptions.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setPriority(option.value)}
-                  className={`py-3 px-4 rounded-lg font-medium text-white transition-all ${
+                  className={`rounded-xl px-4 py-3 font-medium text-white transition-all ${
                     option.color
                   } ${
                     priority === option.value
-                      ? 'ring-2 ring-offset-2 ring-offset-background ring-ring scale-105'
+                      ? 'scale-[1.03] ring-2 ring-ring ring-offset-2 ring-offset-background'
                       : 'opacity-60 hover:opacity-80'
                   }`}
                 >
@@ -140,18 +158,7 @@ export function AddEditTaskScreen({ task, onSave, onCancel }: AddEditTaskScreenP
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="alarm">Alarm / Reminder Time *</Label>
-            <Input
-              id="alarm"
-              type="datetime-local"
-              value={alarmTime}
-              onChange={(e) => setAlarmTime(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+          <div className="flex items-center justify-between rounded-2xl border bg-card/70 p-4">
             <div className="space-y-0.5">
               <Label htmlFor="notification">Notifications</Label>
               <p className="text-sm text-muted-foreground">
@@ -165,7 +172,7 @@ export function AddEditTaskScreen({ task, onSave, onCancel }: AddEditTaskScreenP
             />
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-2">
             <Button
               type="button"
               variant="outline"

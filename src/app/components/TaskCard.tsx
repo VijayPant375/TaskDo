@@ -55,9 +55,13 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
 
   return (
     <div
-      className={`rounded-2xl p-4 shadow-md bg-card border transition-all ${
+      className={`group rounded-[1.35rem] border p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg sm:p-5 ${
         task.completed ? 'opacity-60' : ''
       }`}
+      style={{
+        background:
+          'color-mix(in srgb, var(--card) 90%, transparent)',
+      }}
       onClick={() => onEdit(task)}
     >
       <div className="flex items-start gap-3">
@@ -71,9 +75,9 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="mb-2 flex items-start justify-between gap-2">
             <h3
-              className={`font-semibold ${
+              className={`pr-2 font-semibold leading-6 ${
                 task.completed ? 'line-through text-muted-foreground' : ''
               }`}
             >
@@ -84,24 +88,28 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
             </Badge>
           </div>
 
-          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-            {task.description}
-          </p>
+          {task.description ? (
+            <p className="mb-3 line-clamp-2 text-sm leading-6 text-muted-foreground">
+              {task.description}
+            </p>
+          ) : (
+            <p className="mb-3 text-sm italic text-muted-foreground/80">No description added</p>
+          )}
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-3">
-            <div className="flex items-center gap-1.5">
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5 rounded-full bg-muted/70 px-2.5 py-1">
               <Calendar className="w-4 h-4" />
               <span>{formatDateTime(task.deadline)}</span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 rounded-full bg-muted/70 px-2.5 py-1">
               <AlarmClock className="w-4 h-4" />
               <span>{formatTime(task.alarmTime)}</span>
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
+          <div className="flex items-center justify-between border-t border-border/70 pt-3">
+            <div className="flex items-center gap-1.5 text-xs">
               {task.notificationEnabled ? (
                 <Bell className="w-4 h-4 text-blue-500" />
               ) : (
@@ -119,7 +127,7 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
                 e.stopPropagation();
                 onDelete(task.id);
               }}
-              className="h-8 w-8 p-0"
+              className="h-8 w-8 p-0 opacity-70 transition-opacity group-hover:opacity-100"
             >
               <Trash2 className="w-4 h-4 text-destructive" />
             </Button>

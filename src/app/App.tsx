@@ -329,210 +329,234 @@ function AppContent() {
   const activeTasks = tasks.filter((task) => !task.completed);
   const completedTasks = tasks.filter((task) => task.completed);
   const taskLimitReached = !isPremium && activeTasks.length >= FREE_TASK_LIMIT;
+  const prioritySummary = [
+    { label: 'High priority', value: groupedTasks.high.length, tone: 'text-red-500' },
+    { label: 'Medium priority', value: groupedTasks.medium.length, tone: 'text-blue-500' },
+    { label: 'Low priority', value: groupedTasks.low.length, tone: 'text-green-500' },
+  ];
 
   if (currentScreen === 'success' && checkoutSessionId) {
     return <SuccessScreen onContinue={handleSuccessContinue} sessionId={checkoutSessionId} />;
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background app-shell">
       {currentScreen === 'home' && (
-        <div className="mx-auto max-w-md px-4 py-5 pb-24 sm:py-6">
-          <div className="mb-6 flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-bold">Task Do</h1>
-              {!isPremium ? (
-                <p className="mt-1 max-w-[13rem] text-sm text-muted-foreground">Free plan with up to 50 active tasks</p>
-              ) : (
-                <div className="mt-2">
-                  <PremiumBadge />
-                </div>
-              )}
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-              {!isPremium ? (
-                <Button
-                  className="h-9 bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-xs hover:from-amber-600 hover:to-orange-600 sm:text-sm"
-                  onClick={() => {
-                    setUpgradeModalTrigger('manual');
-                    setShowUpgradeModal(true);
-                  }}
-                  size="sm"
-                >
-                  <Crown className="mr-2 h-4 w-4" />
-                  Upgrade
-                </Button>
-              ) : null}
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setCurrentScreen('notifications')}
-                className="relative"
-              >
-                <Bell className="h-5 w-5" />
-                {activeTasks.filter((task) => task.notificationEnabled).length > 0 ? (
-                  <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                    {activeTasks.filter((task) => task.notificationEnabled).length}
-                  </span>
-                ) : null}
-              </Button>
-
-              <Button variant="ghost" size="icon" onClick={toggleTheme}>
-                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-              </Button>
-
-              <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('settings')}>
-                <Settings className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
-
-          {!isPremium ? (
-            <div className="mb-6 rounded-2xl border bg-card p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm text-muted-foreground">Active tasks</p>
-                  <p className="text-2xl font-bold">
-                    {activeTasks.length} / {FREE_TASK_LIMIT}
-                  </p>
+        <div className="mx-auto max-w-6xl px-4 py-5 pb-24 sm:py-6 lg:px-6">
+          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
+            <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+              <div className="surface-panel rounded-[1.75rem] border p-5 shadow-sm">
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div>
+                    <h1 className="text-3xl font-bold">Task Do</h1>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Plan your day with fewer taps and clearer priorities.
+                    </p>
+                  </div>
+                  {isPremium ? <PremiumBadge size="sm" /> : null}
                 </div>
 
-                <Button
-                  className="h-9 px-3"
-                  onClick={() => {
-                    setUpgradeModalTrigger(taskLimitReached ? 'task_limit' : 'manual');
-                    setShowUpgradeModal(true);
-                  }}
-                  variant={taskLimitReached ? 'default' : 'outline'}
-                >
-                  Upgrade
-                </Button>
+                <div className="grid grid-cols-3 gap-2.5 lg:grid-cols-1">
+                  {prioritySummary.map((item) => (
+                    <div key={item.label} className="rounded-2xl bg-muted/60 p-3 lg:p-4">
+                      <div className={`text-2xl font-bold ${item.tone}`}>{item.value}</div>
+                      <div className="text-xs text-muted-foreground">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {!isPremium ? (
+                  <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Active tasks</p>
+                        <p className="text-2xl font-bold">
+                          {activeTasks.length} / {FREE_TASK_LIMIT}
+                        </p>
+                      </div>
+                      <Button
+                        className="h-9 px-3"
+                        onClick={() => {
+                          setUpgradeModalTrigger(taskLimitReached ? 'task_limit' : 'manual');
+                          setShowUpgradeModal(true);
+                        }}
+                        variant={taskLimitReached ? 'default' : 'outline'}
+                      >
+                        Upgrade
+                      </Button>
+                    </div>
+
+                    {!taskLimitReached && activeTasks.length >= FREE_TASK_LIMIT - 10 ? (
+                      <p className="mt-3 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                        You are getting close to the free plan limit.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                    <p className="text-sm font-medium text-foreground">Premium is active</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Unlimited tasks and billing controls are available in Settings.
+                    </p>
+                  </div>
+                )}
               </div>
+            </aside>
 
-              {!taskLimitReached && activeTasks.length >= FREE_TASK_LIMIT - 10 ? (
-                <p className="mt-3 text-xs leading-5 text-amber-600">
-                  You are getting close to the free plan limit.
-                </p>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="mb-6 grid grid-cols-3 gap-3">
-            <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
-              <div className="text-2xl font-bold text-red-500">{groupedTasks.high.length}</div>
-              <div className="text-xs text-muted-foreground">High Priority</div>
-            </div>
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
-              <div className="text-2xl font-bold text-blue-500">{groupedTasks.medium.length}</div>
-              <div className="text-xs text-muted-foreground">Medium Priority</div>
-            </div>
-            <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3">
-              <div className="text-2xl font-bold text-green-500">{groupedTasks.low.length}</div>
-              <div className="text-xs text-muted-foreground">Low Priority</div>
-            </div>
-          </div>
-
-          {activeTasks.length === 0 ? (
-            <div className="py-12 text-center">
-              <div className="mb-4 inline-flex rounded-full bg-muted p-4">
-                <Plus className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="mb-2 font-semibold">No tasks yet</h3>
-              <p className="text-sm text-muted-foreground">Tap the + button to create your first task</p>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {groupedTasks.high.length > 0 ? (
-                <div>
-                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    High Priority
-                  </h2>
-                  <div className="space-y-3">
-                    {groupedTasks.high.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={handleDelete}
-                        onEdit={handleEdit}
-                      />
-                    ))}
+            <section className="min-w-0">
+              <div className="surface-panel mb-5 rounded-[1.75rem] border p-4 shadow-sm sm:p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold">Today&apos;s flow</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {activeTasks.length === 0
+                        ? 'You are clear for now. Add a task when something new comes up.'
+                        : `${activeTasks.length} active task${activeTasks.length === 1 ? '' : 's'} across your current priorities.`}
+                    </p>
                   </div>
-                </div>
-              ) : null}
 
-              {groupedTasks.medium.length > 0 ? (
-                <div>
-                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Medium Priority
-                  </h2>
-                  <div className="space-y-3">
-                    {groupedTasks.medium.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={handleDelete}
-                        onEdit={handleEdit}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
+                  <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+                    {!isPremium ? (
+                      <Button
+                        className="h-9 bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-xs hover:from-amber-600 hover:to-orange-600 sm:text-sm"
+                        onClick={() => {
+                          setUpgradeModalTrigger('manual');
+                          setShowUpgradeModal(true);
+                        }}
+                        size="sm"
+                      >
+                        <Crown className="mr-2 h-4 w-4" />
+                        Upgrade
+                      </Button>
+                    ) : null}
 
-              {groupedTasks.low.length > 0 ? (
-                <div>
-                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Low Priority
-                  </h2>
-                  <div className="space-y-3">
-                    {groupedTasks.low.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={handleDelete}
-                        onEdit={handleEdit}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              {completedTasks.length > 0 ? (
-                <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      Completed
-                    </h2>
                     <Button
                       variant="ghost"
-                      size="sm"
-                      onClick={handleClearCompleted}
-                      className="text-destructive hover:text-destructive"
+                      size="icon"
+                      onClick={() => setCurrentScreen('notifications')}
+                      className="relative"
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Clear All
+                      <Bell className="h-5 w-5" />
+                      {activeTasks.filter((task) => task.notificationEnabled).length > 0 ? (
+                        <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                          {activeTasks.filter((task) => task.notificationEnabled).length}
+                        </span>
+                      ) : null}
+                    </Button>
+
+                    <Button variant="ghost" size="icon" onClick={toggleTheme}>
+                      {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    </Button>
+
+                    <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('settings')}>
+                      <Settings className="h-5 w-5" />
                     </Button>
                   </div>
+                </div>
+              </div>
 
-                  <div className="space-y-3">
-                    {completedTasks.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        onToggleComplete={handleToggleComplete}
-                        onDelete={handleDelete}
-                        onEdit={handleEdit}
-                      />
-                    ))}
+              {activeTasks.length === 0 ? (
+                <div className="surface-panel rounded-[1.75rem] border px-4 py-12 text-center shadow-sm sm:px-6">
+                  <div className="mb-4 inline-flex rounded-full bg-muted p-4">
+                    <Plus className="h-8 w-8 text-muted-foreground" />
                   </div>
+                  <h3 className="mb-2 font-semibold">No tasks yet</h3>
+                  <p className="mx-auto max-w-sm text-sm leading-6 text-muted-foreground">
+                    Keep the list light. Add your next task only when it deserves attention.
+                  </p>
                 </div>
               ) : null}
-            </div>
-          )}
+              <div className="space-y-6">
+                {groupedTasks.high.length > 0 ? (
+                  <div>
+                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      High Priority
+                    </h2>
+                    <div className="space-y-3">
+                      {groupedTasks.high.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDelete}
+                          onEdit={handleEdit}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {groupedTasks.medium.length > 0 ? (
+                  <div>
+                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Medium Priority
+                    </h2>
+                    <div className="space-y-3">
+                      {groupedTasks.medium.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDelete}
+                          onEdit={handleEdit}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {groupedTasks.low.length > 0 ? (
+                  <div>
+                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Low Priority
+                    </h2>
+                    <div className="space-y-3">
+                      {groupedTasks.low.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDelete}
+                          onEdit={handleEdit}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {completedTasks.length > 0 ? (
+                  <div className="surface-panel rounded-[1.75rem] border p-4 shadow-sm sm:p-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Completed
+                      </h2>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearCompleted}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Clear All
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {completedTasks.map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onToggleComplete={handleToggleComplete}
+                          onDelete={handleDelete}
+                          onEdit={handleEdit}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          </div>
 
           <Button
             size="lg"
