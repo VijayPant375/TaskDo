@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 export interface StoredTask {
   id: string;
@@ -50,7 +51,9 @@ interface DatabaseShape {
   users: StoredUser[];
 }
 
-const dataDirectory = path.resolve(process.cwd(), 'server', 'data');
+const currentFilePath = fileURLToPath(import.meta.url);
+const libraryDirectory = path.dirname(currentFilePath);
+const dataDirectory = path.resolve(libraryDirectory, '..', 'data');
 const storePath = path.join(dataDirectory, 'store.json');
 
 const emptyDatabase: DatabaseShape = {
