@@ -15,7 +15,8 @@ export async function refreshAuthSession() {
 }
 
 export function startGoogleSignIn(returnTo?: string) {
-  const url = new URL(`${API_URL}/api/auth/google/start`);
+  const baseUrl = API_URL || window.location.origin;
+  const url = new URL('/api/auth/google/start', baseUrl);
   if (returnTo) {
     url.searchParams.set('returnTo', returnTo);
   }
