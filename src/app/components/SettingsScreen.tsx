@@ -28,6 +28,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
   const { isPremium, subscriptionStatus } = useSubscription();
   const { googleOAuthEnabled, isAuthenticated, signInWithGoogle, signOut, user } = useAuth();
   const renewalDate = formatDate(subscriptionStatus.currentPeriodEnd);
+  const userInitial = user?.name?.charAt(0).toUpperCase() ?? 'T';
 
   const handleManageSubscription = async () => {
     if (!subscriptionStatus.stripeCustomerId) {
@@ -57,16 +58,28 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
 
         <div className="space-y-4">
           <section className="rounded-3xl border bg-card p-5 sm:p-6">
-            <div className="mb-5">
-              <h2 className="text-lg font-semibold">Account</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {isAuthenticated && user
-                  ? `Signed in as ${user.email}`
-                  : googleOAuthEnabled
-                    ? 'Sign in with Google to sync your tasks across devices.'
-                    : 'Google OAuth is scaffolded and waiting for the final API keys.'}
-              </p>
+            <div className="mb-5 flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                {userInitial}
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Account</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {isAuthenticated && user
+                    ? 'Your account is active and TaskDo is syncing tasks from the backend.'
+                    : googleOAuthEnabled
+                      ? 'Sign in with Google to sync your tasks across devices.'
+                      : 'Google OAuth is scaffolded and waiting for the final API keys.'}
+                </p>
+              </div>
             </div>
+
+            {isAuthenticated && user ? (
+              <div className="mb-5 rounded-2xl border bg-muted/40 p-4">
+                <p className="font-medium">{user.name}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{user.email}</p>
+              </div>
+            ) : null}
 
             {isAuthenticated ? (
               <Button className="w-full" onClick={() => void signOut()} variant="outline">
@@ -153,7 +166,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
           <section className="rounded-3xl border bg-card p-5 sm:p-6">
             <h2 className="text-lg font-semibold">About TaskDo</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              TaskDo is a lightweight task manager with reminders, priorities, a freemium subscription flow, and an account-ready backend foundation.
+              TaskDo is an account-based task manager with reminders, priorities, synced backend storage, and a freemium subscription flow.
             </p>
           </section>
         </div>

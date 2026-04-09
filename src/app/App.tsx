@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ThemeProvider, useTheme } from 'next-themes';
-import { Bell, Crown, Moon, Plus, Settings, Sun, Trash2 } from 'lucide-react';
+import { Bell, Crown, LogOut, Moon, Plus, Settings, Sparkles, Sun, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SubscriptionProvider, useSubscription } from '../context/SubscriptionContext';
-import { createTask, deleteTask, fetchTasks, importTasks, updateTask } from '../services/tasks';
+import { createTask, deleteTask, fetchTasks, updateTask } from '../services/tasks';
 import { FREE_TASK_LIMIT } from '../types/subscription';
 import type { Task } from '../types/task';
 import { AddEditTaskScreen } from './components/AddEditTaskScreen';
+import { AuthLandingScreen } from './components/AuthLandingScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { PremiumBadge } from './components/PremiumBadge';
 import { SettingsScreen } from './components/SettingsScreen';
@@ -15,39 +16,17 @@ import { TaskCard } from './components/TaskCard';
 import { UpgradeModal } from './components/UpgradeModal';
 import { Button } from './components/ui/button';
 
-const TASKS_STORAGE_KEY = 'tasks';
-
-function loadTasksFromLocalStorage(): Task[] {
-  try {
-    const tasksJson = localStorage.getItem(TASKS_STORAGE_KEY);
-    if (!tasksJson) {
-      return [];
-    }
-
-    const tasks = JSON.parse(tasksJson) as Array<Task & { deadline: string; alarmTime: string }>;
-    return tasks.map((task) => ({
-      ...task,
-      deadline: new Date(task.deadline),
-      alarmTime: new Date(task.alarmTime),
-    }));
-  } catch (error) {
-    console.error('Error loading tasks from localStorage:', error);
-    return [];
-  }
-}
-
-function saveTasksToLocalStorage(tasks: Task[]) {
-  try {
-    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(tasks));
-  } catch (error) {
-    console.error('Error saving tasks to localStorage:', error);
-  }
-}
-
 function AppContent() {
   const { theme, setTheme } = useTheme();
   const { canCreateTask, isPremium } = useSubscription();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const {
+    googleOAuthEnabled,
+    isAuthenticated,
+    isLoading: isAuthLoading,
+    signInWithGoogle,
+    signOut,
+    user,
+  } = useAuth();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentScreen, setCurrentScreen] = useState<
@@ -62,7 +41,6 @@ function AppContent() {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [alarmInterval, setAlarmInterval] = useState<number | null>(null);
   const [isTasksLoading, setIsTasksLoading] = useState(false);
-  const hasImportedGuestTasksRef = useRef(false);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -88,23 +66,14 @@ function AppContent() {
     }
 
     if (!isAuthenticated) {
-      hasImportedGuestTasksRef.current = false;
-      setTasks(loadTasksFromLocalStorage());
+      setTasks([]);
       return;
     }
 
-    const syncAuthenticatedTasks = async () => {
+    const loadAuthenticatedTasks = async () => {
       setIsTasksLoading(true);
 
       try {
-        const guestTasks = loadTasksFromLocalStorage();
-
-        if (guestTasks.length > 0 && !hasImportedGuestTasksRef.current) {
-          await importTasks(guestTasks);
-          hasImportedGuestTasksRef.current = true;
-          localStorage.removeItem(TASKS_STORAGE_KEY);
-        }
-
         const remoteTasks = await fetchTasks();
         setTasks(remoteTasks);
       } catch (error) {
@@ -114,18 +83,8 @@ function AppContent() {
       }
     };
 
-    void syncAuthenticatedTasks();
+    void loadAuthenticatedTasks();
   }, [isAuthenticated, isAuthLoading]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      return;
-    }
-
-    if (tasks.length > 0 || localStorage.getItem(TASKS_STORAGE_KEY)) {
-      saveTasksToLocalStorage(tasks);
-    }
-  }, [isAuthenticated, tasks]);
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -249,11 +208,6 @@ function AppContent() {
   };
 
   const persistTaskUpdate = async (nextTask: Task) => {
-    if (!isAuthenticated) {
-      setTasks((prev) => prev.map((task) => (task.id === nextTask.id ? nextTask : task)));
-      return;
-    }
-
     try {
       const updated = await updateTask(nextTask);
       setTasks((prev) => prev.map((task) => (task.id === updated.id ? updated : task)));
@@ -310,11 +264,6 @@ function AppContent() {
   };
 
   const handleDelete = (id: string) => {
-    if (!isAuthenticated) {
-      setTasks((prev) => prev.filter((task) => task.id !== id));
-      return;
-    }
-
     void (async () => {
       try {
         await deleteTask(id);
@@ -346,25 +295,11 @@ function AppContent() {
     void (async () => {
       try {
         if (editingTask) {
-          if (isAuthenticated) {
-            const updatedTask = await updateTask({ ...taskData, id: editingTask.id });
-            setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)));
-          } else {
-            setTasks((prev) =>
-              prev.map((task) =>
-                task.id === editingTask.id ? { ...taskData, id: task.id } : task
-              )
-            );
-          }
-        } else if (isAuthenticated) {
+          const updatedTask = await updateTask({ ...taskData, id: editingTask.id });
+          setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)));
+        } else {
           const createdTask = await createTask(taskData);
           setTasks((prev) => [...prev, createdTask]);
-        } else {
-          const newTask: Task = {
-            ...taskData,
-            id: Date.now().toString(),
-          };
-          setTasks((prev) => [...prev, newTask]);
         }
 
         setCurrentScreen('home');
@@ -393,11 +328,6 @@ function AppContent() {
   };
 
   const handleClearCompleted = () => {
-    if (!isAuthenticated) {
-      setTasks((prev) => prev.filter((task) => !task.completed));
-      return;
-    }
-
     void (async () => {
       try {
         const completedTaskIds = tasks.filter((task) => task.completed).map((task) => task.id);
@@ -427,26 +357,123 @@ function AppContent() {
     { label: 'Medium priority', value: groupedTasks.medium.length, tone: 'text-blue-500' },
     { label: 'Low priority', value: groupedTasks.low.length, tone: 'text-green-500' },
   ];
+  const userInitial = user?.name?.charAt(0).toUpperCase() ?? 'T';
 
   if (currentScreen === 'success' && checkoutSessionId) {
     return <SuccessScreen onContinue={handleSuccessContinue} sessionId={checkoutSessionId} />;
   }
 
+  if (isAuthLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="surface-panel w-full max-w-md rounded-[2rem] border px-8 py-10 text-center shadow-xl">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
+            <Sparkles className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-semibold">Preparing TaskDo</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Restoring your account session and workspace.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <AuthLandingScreen
+        googleOAuthEnabled={googleOAuthEnabled}
+        isLoading={isAuthLoading}
+        onContinueWithGoogle={signInWithGoogle}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background app-shell">
       {currentScreen === 'home' && (
-        <div className="mx-auto max-w-6xl px-4 py-5 pb-24 sm:py-6 lg:px-6">
-          <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="mx-auto max-w-7xl px-4 py-5 pb-24 sm:py-6 lg:px-6">
+          <header className="surface-panel mb-6 rounded-[2rem] border border-white/40 px-5 py-5 shadow-sm sm:px-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
+                  <Sparkles className="h-7 w-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-3xl font-semibold tracking-[-0.03em]">TaskDo</h1>
+                    {isPremium ? <PremiumBadge size="sm" /> : null}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    Welcome back, {user?.name ?? 'there'}. Your tasks are synced to your account.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                {!isPremium ? (
+                  <Button
+                    className="h-10 bg-gradient-to-r from-amber-500 to-orange-500 px-4 hover:from-amber-600 hover:to-orange-600"
+                    onClick={() => {
+                      setUpgradeModalTrigger('manual');
+                      setShowUpgradeModal(true);
+                    }}
+                    size="sm"
+                  >
+                    <Crown className="mr-2 h-4 w-4" />
+                    Upgrade
+                  </Button>
+                ) : null}
+
+                <Button
+                  className="relative"
+                  onClick={() => setCurrentScreen('notifications')}
+                  size="icon"
+                  variant="ghost"
+                >
+                  <Bell className="h-5 w-5" />
+                  {activeTasks.filter((task) => task.notificationEnabled).length > 0 ? (
+                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                      {activeTasks.filter((task) => task.notificationEnabled).length}
+                    </span>
+                  ) : null}
+                </Button>
+
+                <Button variant="ghost" size="icon" onClick={toggleTheme}>
+                  {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                </Button>
+
+                <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('settings')}>
+                  <Settings className="h-5 w-5" />
+                </Button>
+
+                <div className="hidden items-center gap-3 rounded-full border border-white/40 bg-white/65 px-2.5 py-2 shadow-sm backdrop-blur sm:flex">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                    {userInitial}
+                  </div>
+                  <div className="pr-2">
+                    <p className="text-sm font-medium leading-5">{user?.name}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                  <Button className="rounded-full" onClick={() => void signOut()} variant="outline">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
             <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-              <div className="surface-panel rounded-[1.75rem] border p-5 shadow-sm">
+              <div className="surface-panel rounded-[1.9rem] border border-white/40 p-5 shadow-sm">
                 <div className="mb-5 flex items-start justify-between gap-3">
                   <div>
-                    <h1 className="text-3xl font-bold">Task Do</h1>
+                    <h2 className="text-2xl font-semibold tracking-[-0.03em]">Focus dashboard</h2>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Plan your day with fewer taps and clearer priorities.
+                      A structured snapshot of what needs attention next.
                     </p>
                   </div>
-                  {isPremium ? <PremiumBadge size="sm" /> : null}
                 </div>
 
                 <div className="grid grid-cols-3 gap-2.5 lg:grid-cols-1">
@@ -489,15 +516,32 @@ function AppContent() {
                   <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
                     <p className="text-sm font-medium text-foreground">Premium is active</p>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Unlimited tasks and billing controls are available in Settings.
+                      Unlimited tasks and account controls are ready whenever you need them.
                     </p>
                   </div>
                 )}
               </div>
+
+              <div className="surface-panel rounded-[1.9rem] border border-white/40 p-5 shadow-sm">
+                <p className="text-sm font-medium text-muted-foreground">Account</p>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                    {userInitial}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{user?.name}</p>
+                    <p className="truncate text-sm text-muted-foreground">{user?.email}</p>
+                  </div>
+                </div>
+                <Button className="mt-4 w-full" onClick={() => void signOut()} variant="outline">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
+              </div>
             </aside>
 
             <section className="min-w-0">
-              <div className="surface-panel mb-5 rounded-[1.75rem] border p-4 shadow-sm sm:p-5">
+              <div className="surface-panel mb-5 rounded-[1.9rem] border border-white/40 p-4 shadow-sm sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-semibold">Today&apos;s flow</h2>
@@ -510,48 +554,14 @@ function AppContent() {
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                    {!isPremium ? (
-                      <Button
-                        className="h-9 bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-xs hover:from-amber-600 hover:to-orange-600 sm:text-sm"
-                        onClick={() => {
-                          setUpgradeModalTrigger('manual');
-                          setShowUpgradeModal(true);
-                        }}
-                        size="sm"
-                      >
-                        <Crown className="mr-2 h-4 w-4" />
-                        Upgrade
-                      </Button>
-                    ) : null}
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setCurrentScreen('notifications')}
-                      className="relative"
-                    >
-                      <Bell className="h-5 w-5" />
-                      {activeTasks.filter((task) => task.notificationEnabled).length > 0 ? (
-                        <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                          {activeTasks.filter((task) => task.notificationEnabled).length}
-                        </span>
-                      ) : null}
-                    </Button>
-
-                    <Button variant="ghost" size="icon" onClick={toggleTheme}>
-                      {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                    </Button>
-
-                    <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('settings')}>
-                      <Settings className="h-5 w-5" />
-                    </Button>
+                  <div className="rounded-full border border-white/40 bg-white/65 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur">
+                    {completedTasks.length} completed today
                   </div>
                 </div>
               </div>
 
               {activeTasks.length === 0 && !isTasksLoading ? (
-                <div className="surface-panel rounded-[1.75rem] border px-4 py-12 text-center shadow-sm sm:px-6">
+                <div className="surface-panel rounded-[1.9rem] border border-white/40 px-4 py-12 text-center shadow-sm sm:px-6">
                   <button
                     type="button"
                     onClick={handleAddTask}
@@ -625,7 +635,7 @@ function AppContent() {
                 ) : null}
 
                 {completedTasks.length > 0 ? (
-                  <div className="surface-panel rounded-[1.75rem] border p-4 shadow-sm sm:p-5">
+                  <div className="surface-panel rounded-[1.9rem] border border-white/40 p-4 shadow-sm sm:p-5">
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         Completed
