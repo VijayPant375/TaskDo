@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { Bell, Crown, Moon, Plus, Settings, Sun, Trash2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { SubscriptionProvider, useSubscription } from '../context/SubscriptionContext';
+import { createTask, deleteTask, fetchTasks, importTasks, updateTask } from '../services/tasks';
 import { FREE_TASK_LIMIT } from '../types/subscription';
+import type { Task } from '../types/task';
 import { AddEditTaskScreen } from './components/AddEditTaskScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
 import { PremiumBadge } from './components/PremiumBadge';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SuccessScreen } from './components/SuccessScreen';
-import { TaskCard, type Task } from './components/TaskCard';
+import { TaskCard } from './components/TaskCard';
 import { UpgradeModal } from './components/UpgradeModal';
 import { Button } from './components/ui/button';
 
@@ -44,6 +47,7 @@ function saveTasksToLocalStorage(tasks: Task[]) {
 function AppContent() {
   const { theme, setTheme } = useTheme();
   const { canCreateTask, isPremium } = useSubscription();
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [currentScreen, setCurrentScreen] = useState<
@@ -57,10 +61,8 @@ function AppContent() {
   const [alarmingTask, setAlarmingTask] = useState<Task | null>(null);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [alarmInterval, setAlarmInterval] = useState<number | null>(null);
-
-  useEffect(() => {
-    setTasks(loadTasksFromLocalStorage());
-  }, []);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
+  const hasImportedGuestTasksRef = useRef(false);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -81,10 +83,49 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    if (isAuthLoading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      hasImportedGuestTasksRef.current = false;
+      setTasks(loadTasksFromLocalStorage());
+      return;
+    }
+
+    const syncAuthenticatedTasks = async () => {
+      setIsTasksLoading(true);
+
+      try {
+        const guestTasks = loadTasksFromLocalStorage();
+
+        if (guestTasks.length > 0 && !hasImportedGuestTasksRef.current) {
+          await importTasks(guestTasks);
+          hasImportedGuestTasksRef.current = true;
+          localStorage.removeItem(TASKS_STORAGE_KEY);
+        }
+
+        const remoteTasks = await fetchTasks();
+        setTasks(remoteTasks);
+      } catch (error) {
+        console.error('Failed to sync tasks for the authenticated user.', error);
+      } finally {
+        setIsTasksLoading(false);
+      }
+    };
+
+    void syncAuthenticatedTasks();
+  }, [isAuthenticated, isAuthLoading]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      return;
+    }
+
     if (tasks.length > 0 || localStorage.getItem(TASKS_STORAGE_KEY)) {
       saveTasksToLocalStorage(tasks);
     }
-  }, [tasks]);
+  }, [isAuthenticated, tasks]);
 
   useEffect(() => {
     if ('Notification' in window) {
@@ -207,6 +248,20 @@ function AppContent() {
     }
   };
 
+  const persistTaskUpdate = async (nextTask: Task) => {
+    if (!isAuthenticated) {
+      setTasks((prev) => prev.map((task) => (task.id === nextTask.id ? nextTask : task)));
+      return;
+    }
+
+    try {
+      const updated = await updateTask(nextTask);
+      setTasks((prev) => prev.map((task) => (task.id === updated.id ? updated : task)));
+    } catch (error) {
+      console.error('Failed to update task.', error);
+    }
+  };
+
   const dismissAlarm = () => {
     stopAlarmSound();
     setAlarmingTask(null);
@@ -217,11 +272,7 @@ function AppContent() {
 
     if (alarmingTask) {
       const newAlarmTime = new Date(Date.now() + 5 * 60 * 1000);
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === alarmingTask.id ? { ...task, alarmTime: newAlarmTime } : task
-        )
-      );
+      void persistTaskUpdate({ ...alarmingTask, alarmTime: newAlarmTime });
     }
 
     setAlarmingTask(null);
@@ -250,15 +301,28 @@ function AppContent() {
   );
 
   const handleToggleComplete = (id: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
-      )
-    );
+    const target = tasks.find((task) => task.id === id);
+    if (!target) {
+      return;
+    }
+
+    void persistTaskUpdate({ ...target, completed: !target.completed });
   };
 
   const handleDelete = (id: string) => {
-    setTasks((prev) => prev.filter((task) => task.id !== id));
+    if (!isAuthenticated) {
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+      return;
+    }
+
+    void (async () => {
+      try {
+        await deleteTask(id);
+        setTasks((prev) => prev.filter((task) => task.id !== id));
+      } catch (error) {
+        console.error('Failed to delete task.', error);
+      }
+    })();
   };
 
   const handleEdit = (task: Task) => {
@@ -279,22 +343,36 @@ function AppContent() {
   };
 
   const handleSaveTask = (taskData: Omit<Task, 'id'>) => {
-    if (editingTask) {
-      setTasks((prev) =>
-        prev.map((task) =>
-          task.id === editingTask.id ? { ...taskData, id: task.id } : task
-        )
-      );
-    } else {
-      const newTask: Task = {
-        ...taskData,
-        id: Date.now().toString(),
-      };
-      setTasks((prev) => [...prev, newTask]);
-    }
+    void (async () => {
+      try {
+        if (editingTask) {
+          if (isAuthenticated) {
+            const updatedTask = await updateTask({ ...taskData, id: editingTask.id });
+            setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)));
+          } else {
+            setTasks((prev) =>
+              prev.map((task) =>
+                task.id === editingTask.id ? { ...taskData, id: task.id } : task
+              )
+            );
+          }
+        } else if (isAuthenticated) {
+          const createdTask = await createTask(taskData);
+          setTasks((prev) => [...prev, createdTask]);
+        } else {
+          const newTask: Task = {
+            ...taskData,
+            id: Date.now().toString(),
+          };
+          setTasks((prev) => [...prev, newTask]);
+        }
 
-    setCurrentScreen('home');
-    setEditingTask(null);
+        setCurrentScreen('home');
+        setEditingTask(null);
+      } catch (error) {
+        console.error('Failed to save task.', error);
+      }
+    })();
   };
 
   const handleCancelEdit = () => {
@@ -303,17 +381,32 @@ function AppContent() {
   };
 
   const handleToggleNotification = (id: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.id === id
-          ? { ...task, notificationEnabled: !task.notificationEnabled }
-          : task
-      )
-    );
+    const target = tasks.find((task) => task.id === id);
+    if (!target) {
+      return;
+    }
+
+    void persistTaskUpdate({
+      ...target,
+      notificationEnabled: !target.notificationEnabled,
+    });
   };
 
   const handleClearCompleted = () => {
-    setTasks((prev) => prev.filter((task) => !task.completed));
+    if (!isAuthenticated) {
+      setTasks((prev) => prev.filter((task) => !task.completed));
+      return;
+    }
+
+    void (async () => {
+      try {
+        const completedTaskIds = tasks.filter((task) => task.completed).map((task) => task.id);
+        await Promise.all(completedTaskIds.map((taskId) => deleteTask(taskId)));
+        setTasks((prev) => prev.filter((task) => !task.completed));
+      } catch (error) {
+        console.error('Failed to clear completed tasks.', error);
+      }
+    })();
   };
 
   const handleSuccessContinue = () => {
@@ -409,7 +502,9 @@ function AppContent() {
                   <div>
                     <h2 className="text-xl font-semibold">Today&apos;s flow</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {activeTasks.length === 0
+                      {isTasksLoading
+                        ? 'Loading your tasks...'
+                        : activeTasks.length === 0
                         ? 'You are clear for now. Add a task when something new comes up.'
                         : `${activeTasks.length} active task${activeTasks.length === 1 ? '' : 's'} across your current priorities.`}
                     </p>
@@ -455,7 +550,7 @@ function AppContent() {
                 </div>
               </div>
 
-              {activeTasks.length === 0 ? (
+              {activeTasks.length === 0 && !isTasksLoading ? (
                 <div className="surface-panel rounded-[1.75rem] border px-4 py-12 text-center shadow-sm sm:px-6">
                   <button
                     type="button"

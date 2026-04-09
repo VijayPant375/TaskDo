@@ -2,17 +2,7 @@ import { Calendar, Bell, BellOff, AlarmClock, Check, Trash2 } from 'lucide-react
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
-
-export interface Task {
-  id: string;
-  name: string;
-  description: string;
-  deadline: Date;
-  priority: 'high' | 'medium' | 'low';
-  notificationEnabled: boolean;
-  alarmTime: Date;
-  completed: boolean;
-}
+import type { Task } from '../../types/task';
 
 interface TaskCardProps {
   task: Task;

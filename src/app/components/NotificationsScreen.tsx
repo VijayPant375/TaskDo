@@ -1,8 +1,8 @@
 import { X, Bell, BellOff, AlarmClock, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
-import { Task } from './TaskCard';
 import { Badge } from './ui/badge';
+import type { Task } from '../../types/task';
 
 interface NotificationsScreenProps {
   tasks: Task[];

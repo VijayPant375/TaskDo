@@ -4,6 +4,7 @@ import { FREE_TASK_LIMIT } from '../../types/subscription';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { PremiumBadge } from './PremiumBadge';
 import { Button } from './ui/button';
+import { useAuth } from '../../context/AuthContext';
 
 interface SettingsScreenProps {
   activeTaskCount: number;
@@ -25,6 +26,7 @@ function formatDate(value?: string) {
 
 export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: SettingsScreenProps) {
   const { isPremium, subscriptionStatus } = useSubscription();
+  const { googleOAuthEnabled, isAuthenticated, signInWithGoogle, signOut, user } = useAuth();
   const renewalDate = formatDate(subscriptionStatus.currentPeriodEnd);
 
   const handleManageSubscription = async () => {
@@ -54,6 +56,34 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
         </div>
 
         <div className="space-y-4">
+          <section className="rounded-3xl border bg-card p-5 sm:p-6">
+            <div className="mb-5">
+              <h2 className="text-lg font-semibold">Account</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {isAuthenticated && user
+                  ? `Signed in as ${user.email}`
+                  : googleOAuthEnabled
+                    ? 'Sign in with Google to sync your tasks across devices.'
+                    : 'Google OAuth is scaffolded and waiting for the final API keys.'}
+              </p>
+            </div>
+
+            {isAuthenticated ? (
+              <Button className="w-full" onClick={() => void signOut()} variant="outline">
+                Sign out
+              </Button>
+            ) : (
+              <Button
+                className="w-full"
+                disabled={!googleOAuthEnabled}
+                onClick={signInWithGoogle}
+                variant="outline"
+              >
+                Continue with Google
+              </Button>
+            )}
+          </section>
+
           <section className="rounded-3xl border bg-card p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -123,7 +153,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
           <section className="rounded-3xl border bg-card p-5 sm:p-6">
             <h2 className="text-lg font-semibold">About TaskDo</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              TaskDo is a lightweight task manager with reminders, priorities, and a new freemium subscription flow.
+              TaskDo is a lightweight task manager with reminders, priorities, a freemium subscription flow, and an account-ready backend foundation.
             </p>
           </section>
         </div>
