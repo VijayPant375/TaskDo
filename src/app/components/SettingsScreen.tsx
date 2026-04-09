@@ -45,7 +45,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
-      <div className="mx-auto min-h-screen max-w-2xl px-4 py-6">
+      <div className="mx-auto min-h-screen max-w-2xl px-4 py-5 pb-24 sm:py-6">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">Settings</h1>

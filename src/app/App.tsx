@@ -392,16 +392,16 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background app-shell">
       {currentScreen === 'home' && (
-        <div className="screen-transition mx-auto max-w-7xl px-4 py-5 pb-24 sm:py-6 lg:px-6">
-          <header className="surface-panel mb-6 rounded-[2rem] border border-white/20 px-5 py-5 shadow-sm sm:px-6">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
+        <div className="screen-transition mx-auto max-w-7xl px-4 py-4 pb-24 sm:py-6 lg:px-6">
+          <header className="surface-panel mb-5 rounded-[1.75rem] border border-white/20 px-4 py-4 shadow-sm sm:mb-6 sm:px-6 sm:py-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[1.15rem] bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg sm:h-14 sm:w-14">
                   <Sparkles className="h-7 w-7" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h1 className="text-3xl font-semibold tracking-[-0.03em]">TaskDo</h1>
+                    <h1 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">TaskDo</h1>
                     {isPremium ? <PremiumBadge size="sm" /> : null}
                   </div>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
@@ -410,54 +410,58 @@ function AppContent() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                {!isPremium ? (
-                  <Button
-                    className="h-10 bg-gradient-to-r from-amber-500 to-orange-500 px-4 hover:from-amber-600 hover:to-orange-600"
-                    onClick={() => {
-                      setUpgradeModalTrigger('manual');
-                      setShowUpgradeModal(true);
-                    }}
-                    size="sm"
-                  >
-                    <Crown className="mr-2 h-4 w-4" />
-                    Upgrade
-                  </Button>
-                ) : null}
-
-                <Button
-                  className="relative"
-                  onClick={() => setCurrentScreen('notifications')}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <Bell className="h-5 w-5" />
-                  {activeTasks.filter((task) => task.notificationEnabled).length > 0 ? (
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
-                      {activeTasks.filter((task) => task.notificationEnabled).length}
-                    </span>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  {!isPremium ? (
+                    <Button
+                      className="h-10 bg-gradient-to-r from-amber-500 to-orange-500 px-4 hover:from-amber-600 hover:to-orange-600"
+                      onClick={() => {
+                        setUpgradeModalTrigger('manual');
+                        setShowUpgradeModal(true);
+                      }}
+                      size="sm"
+                    >
+                      <Crown className="mr-2 h-4 w-4" />
+                      Upgrade
+                    </Button>
                   ) : null}
-                </Button>
 
-                <Button variant="ghost" size="icon" onClick={toggleTheme}>
-                  {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-                </Button>
+                  <Button
+                    className="relative"
+                    onClick={() => setCurrentScreen('notifications')}
+                    size="icon"
+                    variant="ghost"
+                  >
+                    <Bell className="h-5 w-5" />
+                    {activeTasks.filter((task) => task.notificationEnabled).length > 0 ? (
+                      <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+                        {activeTasks.filter((task) => task.notificationEnabled).length}
+                      </span>
+                    ) : null}
+                  </Button>
 
-                <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('settings')}>
-                  <Settings className="h-5 w-5" />
-                </Button>
+                  <Button variant="ghost" size="icon" onClick={toggleTheme}>
+                    {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                  </Button>
 
-                <div className="hidden items-center gap-3 rounded-full border border-border/70 bg-muted/75 px-2.5 py-2 shadow-sm backdrop-blur sm:flex">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                    {userInitial}
+                  <Button variant="ghost" size="icon" onClick={() => setCurrentScreen('settings')}>
+                    <Settings className="h-5 w-5" />
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-[1.3rem] border border-border/70 bg-muted/75 px-3 py-2 shadow-sm backdrop-blur sm:justify-start sm:rounded-full">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                      {userInitial}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium leading-5">{user?.name}</p>
+                      <p className="truncate text-xs text-muted-foreground/90">{user?.email}</p>
+                    </div>
                   </div>
-                  <div className="pr-2">
-                    <p className="text-sm font-medium leading-5">{user?.name}</p>
-                    <p className="text-xs text-muted-foreground/90">{user?.email}</p>
-                  </div>
-                  <Button className="rounded-full" onClick={() => void signOut()} variant="outline">
+                  <Button className="shrink-0 rounded-full" onClick={() => void signOut()} variant="outline">
                     <LogOut className="mr-2 h-4 w-4" />
-                    Sign out
+                    <span className="hidden sm:inline">Sign out</span>
                   </Button>
                 </div>
               </div>
@@ -495,7 +499,7 @@ function AppContent() {
                         </p>
                       </div>
                       <Button
-                        className="h-9 px-3"
+                        className="h-9 shrink-0 px-3"
                         onClick={() => {
                           setUpgradeModalTrigger(taskLimitReached ? 'task_limit' : 'manual');
                           setShowUpgradeModal(true);
@@ -526,7 +530,7 @@ function AppContent() {
 
             <section className="min-w-0">
               <div className="surface-panel mb-5 rounded-[1.9rem] border border-white/20 p-4 shadow-sm sm:p-5">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h2 className="text-xl font-semibold">Today&apos;s flow</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -538,7 +542,7 @@ function AppContent() {
                     </p>
                   </div>
 
-                  <div className="rounded-full border border-border/70 bg-muted/75 px-4 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur">
+                  <div className="w-fit rounded-full border border-border/70 bg-muted/75 px-4 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur">
                     {completedTasks.length} completed today
                   </div>
                 </div>
@@ -654,14 +658,14 @@ function AppContent() {
 
           <Button
             size="lg"
-            className="fixed bottom-5 right-5 h-14 w-14 rounded-full shadow-lg sm:bottom-6 sm:right-6"
+            className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg sm:bottom-6 sm:right-6"
             onClick={handleAddTask}
           >
             <Plus className="h-6 w-6" />
           </Button>
 
           {taskLimitReached ? (
-            <div className="fixed bottom-24 right-4 max-w-[11rem] rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow-lg sm:right-6">
+            <div className="fixed bottom-24 left-4 right-20 rounded-xl bg-amber-500 px-3 py-2 text-sm font-medium text-white shadow-lg sm:left-auto sm:right-6 sm:max-w-[11rem]">
               Free limit reached
             </div>
           ) : null}

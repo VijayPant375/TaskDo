@@ -19,21 +19,21 @@ export function AuthLandingScreen({
   onContinueWithGoogle,
 }: AuthLandingScreenProps) {
   return (
-    <div className="screen-transition relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
+    <div className="screen-transition relative min-h-screen overflow-hidden px-4 py-5 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.22),_transparent_28%),radial-gradient(circle_at_80%_20%,_rgba(14,165,233,0.18),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_26%)]" />
 
-      <div className="relative mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="space-y-6">
+      <div className="relative mx-auto grid min-h-[calc(100vh-2.5rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="space-y-5 lg:space-y-6">
           <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/80 px-3 py-1.5 text-sm text-foreground shadow-sm backdrop-blur">
             <Sparkles className="h-4 w-4 text-amber-500" />
             Structured work, calmer days
           </div>
 
           <div className="space-y-4">
-            <h1 className="max-w-xl text-5xl font-semibold leading-tight tracking-[-0.04em] text-balance sm:text-6xl">
+            <h1 className="max-w-xl text-4xl font-semibold leading-[1.02] tracking-[-0.05em] text-balance sm:text-5xl lg:text-6xl">
               TaskDo turns scattered work into a focused daily system.
             </h1>
-            <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
+            <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
               Sign in once, keep every task in your account, and pick up your day from any device
               without depending on browser-local storage.
             </p>
@@ -54,7 +54,7 @@ export function AuthLandingScreen({
 
         <section className="relative">
           <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-amber-400/20 via-white/10 to-sky-400/20 blur-2xl" />
-          <div className="surface-panel relative rounded-[2rem] border border-white/20 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:p-8">
+          <div className="surface-panel relative rounded-[2rem] border border-white/20 p-5 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:p-8">
             <div className="mb-8 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
                 <Cloud className="h-6 w-6" />
@@ -66,7 +66,9 @@ export function AuthLandingScreen({
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-3xl font-semibold tracking-[-0.03em]">Sign in to your workspace</h3>
+              <h3 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">
+                Sign in to your workspace
+              </h3>
               <p className="text-sm leading-7 text-muted-foreground">
                 Google sign-in creates your account automatically and unlocks your synced task space.
               </p>

@@ -65,7 +65,7 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <h3
               className={`pr-2 font-semibold leading-6 ${
                 task.completed ? 'line-through text-muted-foreground' : ''
@@ -73,7 +73,7 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
             >
               {task.name}
             </h3>
-            <Badge className={`${priorityColors[task.priority]} text-white shrink-0`}>
+            <Badge className={`${priorityColors[task.priority]} w-fit text-white shrink-0`}>
               {priorityLabels[task.priority]}
             </Badge>
           </div>
@@ -98,7 +98,7 @@ export function TaskCard({ task, onToggleComplete, onDelete, onEdit }: TaskCardP
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border/70 pt-3">
+          <div className="flex flex-col gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-1.5 text-xs">
               {task.notificationEnabled ? (
                 <Bell className="w-4 h-4 text-blue-500" />

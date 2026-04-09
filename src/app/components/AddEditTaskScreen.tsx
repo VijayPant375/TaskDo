@@ -76,7 +76,7 @@ export function AddEditTaskScreen({ task, onSave, onCancel }: AddEditTaskScreenP
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
-      <div className="mx-auto min-h-screen max-w-2xl px-4 py-5 sm:py-8">
+      <div className="mx-auto min-h-screen max-w-2xl px-4 py-5 pb-24 sm:py-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">{task ? 'Edit Task' : 'Add New Task'}</h1>
@@ -172,7 +172,7 @@ export function AddEditTaskScreen({ task, onSave, onCancel }: AddEditTaskScreenP
             />
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <Button
               type="button"
               variant="outline"
