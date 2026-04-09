@@ -392,8 +392,8 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background app-shell">
       {currentScreen === 'home' && (
-        <div className="mx-auto max-w-7xl px-4 py-5 pb-24 sm:py-6 lg:px-6">
-          <header className="surface-panel mb-6 rounded-[2rem] border border-white/40 px-5 py-5 shadow-sm sm:px-6">
+        <div className="screen-transition mx-auto max-w-7xl px-4 py-5 pb-24 sm:py-6 lg:px-6">
+          <header className="surface-panel mb-6 rounded-[2rem] border border-white/20 px-5 py-5 shadow-sm sm:px-6">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
@@ -447,13 +447,13 @@ function AppContent() {
                   <Settings className="h-5 w-5" />
                 </Button>
 
-                <div className="hidden items-center gap-3 rounded-full border border-white/40 bg-white/65 px-2.5 py-2 shadow-sm backdrop-blur sm:flex">
+                <div className="hidden items-center gap-3 rounded-full border border-border/70 bg-muted/75 px-2.5 py-2 shadow-sm backdrop-blur sm:flex">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
                     {userInitial}
                   </div>
                   <div className="pr-2">
                     <p className="text-sm font-medium leading-5">{user?.name}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    <p className="text-xs text-muted-foreground/90">{user?.email}</p>
                   </div>
                   <Button className="rounded-full" onClick={() => void signOut()} variant="outline">
                     <LogOut className="mr-2 h-4 w-4" />
@@ -466,7 +466,7 @@ function AppContent() {
 
           <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
             <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
-              <div className="surface-panel rounded-[1.9rem] border border-white/40 p-5 shadow-sm">
+              <div className="surface-panel rounded-[1.9rem] border border-white/20 p-5 shadow-sm">
                 <div className="mb-5 flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-2xl font-semibold tracking-[-0.03em]">Focus dashboard</h2>
@@ -522,26 +522,10 @@ function AppContent() {
                 )}
               </div>
 
-              <div className="surface-panel rounded-[1.9rem] border border-white/40 p-5 shadow-sm">
-                <p className="text-sm font-medium text-muted-foreground">Account</p>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                    {userInitial}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{user?.name}</p>
-                    <p className="truncate text-sm text-muted-foreground">{user?.email}</p>
-                  </div>
-                </div>
-                <Button className="mt-4 w-full" onClick={() => void signOut()} variant="outline">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign out
-                </Button>
-              </div>
             </aside>
 
             <section className="min-w-0">
-              <div className="surface-panel mb-5 rounded-[1.9rem] border border-white/40 p-4 shadow-sm sm:p-5">
+              <div className="surface-panel mb-5 rounded-[1.9rem] border border-white/20 p-4 shadow-sm sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-semibold">Today&apos;s flow</h2>
@@ -554,14 +538,14 @@ function AppContent() {
                     </p>
                   </div>
 
-                  <div className="rounded-full border border-white/40 bg-white/65 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur">
+                  <div className="rounded-full border border-border/70 bg-muted/75 px-4 py-2 text-sm font-medium text-foreground shadow-sm backdrop-blur">
                     {completedTasks.length} completed today
                   </div>
                 </div>
               </div>
 
               {activeTasks.length === 0 && !isTasksLoading ? (
-                <div className="surface-panel rounded-[1.9rem] border border-white/40 px-4 py-12 text-center shadow-sm sm:px-6">
+                <div className="surface-panel rounded-[1.9rem] border border-white/20 px-4 py-12 text-center shadow-sm sm:px-6">
                   <button
                     type="button"
                     onClick={handleAddTask}
@@ -635,7 +619,7 @@ function AppContent() {
                 ) : null}
 
                 {completedTasks.length > 0 ? (
-                  <div className="surface-panel rounded-[1.9rem] border border-white/40 p-4 shadow-sm sm:p-5">
+                  <div className="surface-panel rounded-[1.9rem] border border-white/20 p-4 shadow-sm sm:p-5">
                     <div className="mb-3 flex items-center justify-between">
                       <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         Completed

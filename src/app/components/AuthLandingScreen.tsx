@@ -19,12 +19,12 @@ export function AuthLandingScreen({
   onContinueWithGoogle,
 }: AuthLandingScreenProps) {
   return (
-    <div className="relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
+    <div className="screen-transition relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.22),_transparent_28%),radial-gradient(circle_at_80%_20%,_rgba(14,165,233,0.18),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_26%)]" />
 
       <div className="relative mx-auto grid min-h-[calc(100vh-3rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
         <section className="space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/60 px-3 py-1.5 text-sm text-foreground shadow-sm backdrop-blur">
+          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/80 px-3 py-1.5 text-sm text-foreground shadow-sm backdrop-blur">
             <Sparkles className="h-4 w-4 text-amber-500" />
             Structured work, calmer days
           </div>
@@ -43,10 +43,10 @@ export function AuthLandingScreen({
             {featureList.map((item) => (
               <div
                 key={item}
-                className="flex items-center gap-3 rounded-2xl border border-white/50 bg-white/70 px-4 py-3 shadow-sm backdrop-blur"
+                className="flex items-center gap-3 rounded-2xl border border-border/70 bg-muted/80 px-4 py-3 shadow-sm backdrop-blur"
               >
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                <span className="text-sm font-medium">{item}</span>
+                <span className="text-sm font-medium text-foreground">{item}</span>
               </div>
             ))}
           </div>
@@ -54,7 +54,7 @@ export function AuthLandingScreen({
 
         <section className="relative">
           <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-br from-amber-400/20 via-white/10 to-sky-400/20 blur-2xl" />
-          <div className="surface-panel relative rounded-[2rem] border border-white/50 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:p-8">
+          <div className="surface-panel relative rounded-[2rem] border border-white/20 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.14)] sm:p-8">
             <div className="mb-8 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
                 <Cloud className="h-6 w-6" />
@@ -108,14 +108,14 @@ export function AuthLandingScreen({
             ) : null}
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border bg-background/70 p-4">
+              <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
                 <ShieldCheck className="mb-3 h-5 w-5 text-emerald-500" />
                 <p className="text-sm font-medium">Account-backed data</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   Your tasks live on the backend, not only in one browser.
                 </p>
               </div>
-              <div className="rounded-2xl border bg-background/70 p-4">
+              <div className="rounded-2xl border border-border/70 bg-background/75 p-4">
                 <Sparkles className="mb-3 h-5 w-5 text-sky-500" />
                 <p className="text-sm font-medium">A calmer workflow</p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
