@@ -27,7 +27,6 @@ import {
   getUserById,
   importTasksForUser,
   listTasksByUser,
-  pruneExpiredOAuthStates,
   saveOAuthState,
   updateSessionRefreshToken,
   updateTaskForUser,
@@ -386,11 +385,6 @@ app.use(express.json());
 app.use('/api/auth/', authLimiter);
 app.use('/api/', apiLimiter);
 
-app.use((_request, _response, next) => {
-  pruneExpiredOAuthStates();
-  next();
-});
-
 app.get('/api/health', (_request, response) => {
   response.json({
     googleOAuthConfigured: isGoogleOAuthConfigured,
@@ -416,7 +410,7 @@ app.get('/api/auth/session', (request, response) => {
   });
 });
 
-app.get('/api/auth/google/start', (request, response) => {
+app.get('/api/auth/google/start', async (request, response) => {
   if (!isGoogleOAuthConfigured) {
     response.status(503).send('Google OAuth is not configured yet.');
     return;
@@ -430,12 +424,18 @@ app.get('/api/auth/google/start', (request, response) => {
       ? request.query.returnTo
       : '/';
 
-  saveOAuthState({
-    codeVerifier,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    returnTo,
-    state,
-  });
+  try {
+    await saveOAuthState({
+      codeVerifier,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      returnTo,
+      state,
+    });
+  } catch (error) {
+    console.error('Failed to store OAuth state.', error);
+    response.status(500).send('Unable to start Google sign-in.');
+    return;
+  }
 
   const googleUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   googleUrl.searchParams.set('client_id', googleClientId as string);
@@ -465,7 +465,7 @@ app.get('/api/auth/google/callback', async (request, response) => {
     return;
   }
 
-  const oauthState = consumeOAuthState(state);
+  const oauthState = await consumeOAuthState(state);
   if (!oauthState || new Date(oauthState.expiresAt).getTime() <= Date.now()) {
     response.status(400).send('OAuth state is invalid or expired.');
     return;

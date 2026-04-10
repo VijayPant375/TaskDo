@@ -1,10 +1,11 @@
 import { Redis } from 'ioredis';
-import type { StoredSession } from './store.js';
+import type { StoredOAuthState, StoredSession } from './store.js';
 
 let sharedRedisClient: Redis | null = null;
 let hasLoggedMissingRedisUrl = false;
 let redisAvailable = false;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
+const oauthStateLifetimeSeconds = 60 * 10;
 
 function getRedisUrl() {
   const value = process.env.REDIS_URL?.trim();
@@ -82,6 +83,10 @@ function getSessionKey(sessionId: string) {
   return `session:${sessionId}`;
 }
 
+function getOAuthStateKey(state: string) {
+  return `oauth:${state}`;
+}
+
 export async function setSession(session: StoredSession) {
   const client = getRedisClient();
   if (!client) {
@@ -143,6 +148,71 @@ export async function deleteSession(sessionId: string) {
   } catch (error) {
     redisAvailable = false;
     console.warn('Failed to delete session from Redis. Falling back to file-backed storage.', error);
+    return false;
+  }
+}
+
+export async function setOAuthState(state: StoredOAuthState) {
+  const client = getRedisClient();
+  if (!client) {
+    return false;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return false;
+    }
+
+    await client.set(
+      getOAuthStateKey(state.state),
+      JSON.stringify(state),
+      'EX',
+      oauthStateLifetimeSeconds
+    );
+    return true;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn('Failed to write OAuth state to Redis. Falling back to file-backed storage.', error);
+    return false;
+  }
+}
+
+export async function getOAuthState(stateKey: string) {
+  const client = getRedisClient();
+  if (!client) {
+    return null;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return null;
+    }
+
+    const raw = await client.get(getOAuthStateKey(stateKey));
+    return raw ? (JSON.parse(raw) as StoredOAuthState) : null;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn('Failed to read OAuth state from Redis. Falling back to file-backed storage.', error);
+    return null;
+  }
+}
+
+export async function deleteOAuthState(stateKey: string) {
+  const client = getRedisClient();
+  if (!client) {
+    return false;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return false;
+    }
+
+    await client.del(getOAuthStateKey(stateKey));
+    return true;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn('Failed to delete OAuth state from Redis. Falling back to file-backed storage.', error);
     return false;
   }
 }

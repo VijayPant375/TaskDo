@@ -3,9 +3,11 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
+  getRedisClient,
   deleteSession as deleteRedisSession,
   getSession as getRedisSession,
   isRedisAvailable,
+  setOAuthState as setRedisOAuthState,
   setSession as setRedisSession,
 } from './redis.js';
 
@@ -175,14 +177,18 @@ export function upsertGoogleUser(input: {
   });
 }
 
-export function saveOAuthState(input: StoredOAuthState) {
+export async function saveOAuthState(input: StoredOAuthState) {
+  if (await setRedisOAuthState(input)) {
+    return;
+  }
+
   mutateDatabase((database) => {
     database.oauthStates = database.oauthStates.filter((item) => item.state !== input.state);
     database.oauthStates.push(input);
   });
 }
 
-export function consumeOAuthState(state: string) {
+function consumeOAuthStateFromFile(state: string) {
   return mutateDatabase((database) => {
     const match = database.oauthStates.find((item) => item.state === state) ?? null;
     database.oauthStates = database.oauthStates.filter((item) => item.state !== state);
@@ -190,7 +196,33 @@ export function consumeOAuthState(state: string) {
   });
 }
 
-export function pruneExpiredOAuthStates() {
+export async function consumeOAuthState(state: string) {
+  const client = getRedisClient();
+
+  if (client && (await isRedisAvailable())) {
+    try {
+      const key = `oauth:${state}`;
+      const result = await client.multi().get(key).del(key).exec();
+      const rawState = result?.[0]?.[1];
+
+      if (typeof rawState === 'string') {
+        return JSON.parse(rawState) as StoredOAuthState;
+      }
+
+      return null;
+    } catch (error) {
+      console.warn('Failed to consume OAuth state from Redis. Falling back to file-backed storage.', error);
+    }
+  }
+
+  return consumeOAuthStateFromFile(state);
+}
+
+export async function pruneExpiredOAuthStates() {
+  if (await isRedisAvailable()) {
+    return;
+  }
+
   const now = Date.now();
   mutateDatabase((database) => {
     database.oauthStates = database.oauthStates.filter(
