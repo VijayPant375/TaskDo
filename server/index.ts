@@ -14,6 +14,12 @@ import {
   setAuthCookies,
 } from './lib/cookies.js';
 import {
+  cacheSubscription,
+  getCachedSubscription,
+  invalidateSubscriptionCache,
+  type CachedSubscriptionPayload,
+} from './lib/redis.js';
+import {
   consumeOAuthState,
   countActiveTasksByUser,
   createSession,
@@ -190,14 +196,31 @@ function serializeSubscriptionForClient(userId: string) {
   };
 }
 
+function serializeStoredSubscription(subscription: ReturnType<typeof getSubscriptionByUserId>): CachedSubscriptionPayload {
+  if (!subscription) {
+    return {
+      tier: 'free',
+    };
+  }
+
+  return {
+    tier: subscription.tier,
+    stripeCustomerId: subscription.stripeCustomerId ?? undefined,
+    stripeSubscriptionId: subscription.stripeSubscriptionId ?? undefined,
+    billingPeriod: subscription.billingPeriod ?? undefined,
+    currentPeriodEnd: subscription.currentPeriodEnd ?? undefined,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+  };
+}
+
 function isPremiumUser(userId: string) {
   return serializeSubscriptionForClient(userId).tier === 'premium';
 }
 
-function persistSubscriptionForUser(userId: string, subscription: Stripe.Subscription) {
+async function persistSubscriptionForUser(userId: string, subscription: Stripe.Subscription) {
   const payload = getSubscriptionPayload(subscription);
 
-  return upsertSubscriptionForUser(userId, {
+  const persisted = upsertSubscriptionForUser(userId, {
     billingPeriod: payload.billingPeriod,
     cancelAtPeriodEnd: payload.cancelAtPeriodEnd,
     currentPeriodEnd: payload.currentPeriodEnd
@@ -208,18 +231,30 @@ function persistSubscriptionForUser(userId: string, subscription: Stripe.Subscri
     stripeSubscriptionId: payload.subscriptionId,
     tier: payload.isPremium ? 'premium' : 'free',
   });
+
+  await invalidateSubscriptionCache(userId);
+  return persisted;
 }
 
 async function syncSubscriptionForUser(userId: string) {
   const stored = getSubscriptionByUserId(userId);
+  const cached = await getCachedSubscription(userId);
+
+  if (cached) {
+    return cached;
+  }
 
   if (!stored?.stripeSubscriptionId || !stripe) {
-    return serializeSubscriptionForClient(userId);
+    const payload = serializeStoredSubscription(stored);
+    await cacheSubscription(userId, payload);
+    return payload;
   }
 
   const subscription = await stripe.subscriptions.retrieve(stored.stripeSubscriptionId);
-  persistSubscriptionForUser(userId, subscription);
-  return serializeSubscriptionForClient(userId);
+  await persistSubscriptionForUser(userId, subscription);
+  const payload = serializeSubscriptionForClient(userId);
+  await cacheSubscription(userId, payload);
+  return payload;
 }
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
@@ -237,7 +272,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       ? await stripe.subscriptions.retrieve(session.subscription)
       : session.subscription;
 
-  persistSubscriptionForUser(userId, subscription);
+  await persistSubscriptionForUser(userId, subscription);
+  await invalidateSubscriptionCache(userId);
 }
 
 async function handleSubscriptionChanged(subscription: Stripe.Subscription) {
@@ -254,7 +290,8 @@ async function handleSubscriptionChanged(subscription: Stripe.Subscription) {
     return;
   }
 
-  persistSubscriptionForUser(userId, subscription);
+  await persistSubscriptionForUser(userId, subscription);
+  await invalidateSubscriptionCache(userId);
 }
 
 async function exchangeGoogleCodeForProfile(code: string, codeVerifier: string) {
@@ -772,7 +809,7 @@ app.post('/api/verify-subscription', requireAuth, async (request: AuthenticatedR
         ? await stripe!.subscriptions.retrieve(session.subscription)
         : session.subscription;
 
-    persistSubscriptionForUser(request.authUser!.id, subscription);
+    await persistSubscriptionForUser(request.authUser!.id, subscription);
     response.json(getSubscriptionPayload(subscription));
   } catch (error) {
     console.error('Failed to verify Stripe subscription.', error);

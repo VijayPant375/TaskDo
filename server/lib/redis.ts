@@ -6,6 +6,16 @@ let hasLoggedMissingRedisUrl = false;
 let redisAvailable = false;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
 const oauthStateLifetimeSeconds = 60 * 10;
+const subscriptionCacheLifetimeSeconds = 60 * 5;
+
+export interface CachedSubscriptionPayload {
+  tier: 'free' | 'premium';
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  billingPeriod?: 'monthly' | 'yearly';
+  currentPeriodEnd?: string;
+  cancelAtPeriodEnd?: boolean;
+}
 
 function getRedisUrl() {
   const value = process.env.REDIS_URL?.trim();
@@ -85,6 +95,10 @@ function getSessionKey(sessionId: string) {
 
 function getOAuthStateKey(state: string) {
   return `oauth:${state}`;
+}
+
+function getSubscriptionCacheKey(userId: string) {
+  return `sub_cache:${userId}`;
 }
 
 export async function setSession(session: StoredSession) {
@@ -213,6 +227,80 @@ export async function deleteOAuthState(stateKey: string) {
   } catch (error) {
     redisAvailable = false;
     console.warn('Failed to delete OAuth state from Redis. Falling back to file-backed storage.', error);
+    return false;
+  }
+}
+
+export async function cacheSubscription(userId: string, payload: CachedSubscriptionPayload) {
+  const client = getRedisClient();
+  if (!client) {
+    return false;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return false;
+    }
+
+    await client.set(
+      getSubscriptionCacheKey(userId),
+      JSON.stringify(payload),
+      'EX',
+      subscriptionCacheLifetimeSeconds
+    );
+    return true;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn(
+      'Failed to write subscription cache to Redis. Falling back to uncached subscription reads.',
+      error
+    );
+    return false;
+  }
+}
+
+export async function getCachedSubscription(userId: string) {
+  const client = getRedisClient();
+  if (!client) {
+    return null;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return null;
+    }
+
+    const raw = await client.get(getSubscriptionCacheKey(userId));
+    return raw ? (JSON.parse(raw) as CachedSubscriptionPayload) : null;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn(
+      'Failed to read subscription cache from Redis. Falling back to direct subscription reads.',
+      error
+    );
+    return null;
+  }
+}
+
+export async function invalidateSubscriptionCache(userId: string) {
+  const client = getRedisClient();
+  if (!client) {
+    return false;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return false;
+    }
+
+    await client.del(getSubscriptionCacheKey(userId));
+    return true;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn(
+      'Failed to invalidate subscription cache in Redis. Falling back to direct subscription reads.',
+      error
+    );
     return false;
   }
 }
