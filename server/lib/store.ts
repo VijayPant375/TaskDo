@@ -65,12 +65,22 @@ export interface StoredOAuthState {
   expiresAt: string;
 }
 
-interface DatabaseShape {
+export interface DatabaseShape {
   oauthStates: StoredOAuthState[];
   sessions: StoredSession[];
   subscriptions: StoredSubscription[];
   tasks: StoredTask[];
   users: StoredUser[];
+}
+
+export interface IndexedDatabase extends DatabaseShape {
+  userById: Map<string, StoredUser>;
+  userByEmail: Map<string, StoredUser>;
+  userByProviderAccountId: Map<string, StoredUser>;
+  tasksByUserId: Map<string, StoredTask[]>;
+  subscriptionByUserId: Map<string, StoredSubscription>;
+  subscriptionByStripeCustomerId: Map<string, StoredSubscription>;
+  subscriptionByStripeSubscriptionId: Map<string, StoredSubscription>;
 }
 
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -86,6 +96,131 @@ const emptyDatabase: DatabaseShape = {
   users: [],
 };
 
+function cloneDatabaseShape(database: DatabaseShape): DatabaseShape {
+  return {
+    oauthStates: [...database.oauthStates],
+    sessions: [...database.sessions],
+    subscriptions: [...database.subscriptions],
+    tasks: [...database.tasks],
+    users: [...database.users],
+  };
+}
+
+export function buildIndexes(database: DatabaseShape): IndexedDatabase {
+  const indexedDatabase: IndexedDatabase = {
+    ...cloneDatabaseShape(database),
+    subscriptionByStripeCustomerId: new Map<string, StoredSubscription>(),
+    subscriptionByStripeSubscriptionId: new Map<string, StoredSubscription>(),
+    subscriptionByUserId: new Map<string, StoredSubscription>(),
+    tasksByUserId: new Map<string, StoredTask[]>(),
+    userByEmail: new Map<string, StoredUser>(),
+    userById: new Map<string, StoredUser>(),
+    userByProviderAccountId: new Map<string, StoredUser>(),
+  };
+
+  for (const user of indexedDatabase.users) {
+    indexedDatabase.userById.set(user.id, user);
+    indexedDatabase.userByEmail.set(user.email.toLowerCase(), user);
+    indexedDatabase.userByProviderAccountId.set(user.providerAccountId, user);
+  }
+
+  for (const task of indexedDatabase.tasks) {
+    const tasks = indexedDatabase.tasksByUserId.get(task.userId) ?? [];
+    tasks.push(task);
+    indexedDatabase.tasksByUserId.set(task.userId, tasks);
+  }
+
+  for (const subscription of indexedDatabase.subscriptions) {
+    indexedDatabase.subscriptionByUserId.set(subscription.userId, subscription);
+
+    if (subscription.stripeCustomerId) {
+      indexedDatabase.subscriptionByStripeCustomerId.set(
+        subscription.stripeCustomerId,
+        subscription
+      );
+    }
+
+    if (subscription.stripeSubscriptionId) {
+      indexedDatabase.subscriptionByStripeSubscriptionId.set(
+        subscription.stripeSubscriptionId,
+        subscription
+      );
+    }
+  }
+
+  return indexedDatabase;
+}
+
+function refreshUserIndexes(database: IndexedDatabase) {
+  database.userById.clear();
+  database.userByEmail.clear();
+  database.userByProviderAccountId.clear();
+
+  for (const user of database.users) {
+    database.userById.set(user.id, user);
+    database.userByEmail.set(user.email.toLowerCase(), user);
+    database.userByProviderAccountId.set(user.providerAccountId, user);
+  }
+}
+
+function refreshTasksIndex(database: IndexedDatabase, userId: string) {
+  const tasks = database.tasks.filter((task) => task.userId === userId);
+
+  if (tasks.length === 0) {
+    database.tasksByUserId.delete(userId);
+    return;
+  }
+
+  database.tasksByUserId.set(userId, tasks);
+}
+
+function refreshSubscriptionIndexes(database: IndexedDatabase) {
+  database.subscriptionByUserId.clear();
+  database.subscriptionByStripeCustomerId.clear();
+  database.subscriptionByStripeSubscriptionId.clear();
+
+  for (const subscription of database.subscriptions) {
+    database.subscriptionByUserId.set(subscription.userId, subscription);
+
+    if (subscription.stripeCustomerId) {
+      database.subscriptionByStripeCustomerId.set(
+        subscription.stripeCustomerId,
+        subscription
+      );
+    }
+
+    if (subscription.stripeSubscriptionId) {
+      database.subscriptionByStripeSubscriptionId.set(
+        subscription.stripeSubscriptionId,
+        subscription
+      );
+    }
+  }
+}
+
+export function updateIndexesOnWrite(
+  database: IndexedDatabase,
+  entity: 'user' | 'task' | 'subscription',
+  record: unknown
+) {
+  if (entity === 'user') {
+    refreshUserIndexes(database);
+    return;
+  }
+
+  if (entity === 'task') {
+    const task = record as StoredTask | null;
+    if (!task) {
+      return;
+    }
+
+    refreshTasksIndex(database, task.userId);
+    return;
+  }
+
+  refreshSubscriptionIndexes(database);
+}
+
 function ensureStoreFile() {
   if (!fs.existsSync(dataDirectory)) {
     fs.mkdirSync(dataDirectory, { recursive: true });
@@ -96,32 +231,45 @@ function ensureStoreFile() {
   }
 }
 
-function readDatabase(): DatabaseShape {
+function readDatabase(): IndexedDatabase {
   ensureStoreFile();
 
   try {
     const raw = fs.readFileSync(storePath, 'utf8');
     const parsed = JSON.parse(raw) as Partial<DatabaseShape>;
 
-    return {
+    return buildIndexes({
       oauthStates: parsed.oauthStates ?? [],
       sessions: parsed.sessions ?? [],
       subscriptions: parsed.subscriptions ?? [],
       tasks: parsed.tasks ?? [],
       users: parsed.users ?? [],
-    };
+    });
   } catch (error) {
     console.error('Failed to read auth/task store. Falling back to an empty database.', error);
-    return structuredClone(emptyDatabase);
+    return buildIndexes(structuredClone(emptyDatabase));
   }
 }
 
 function writeDatabase(next: DatabaseShape) {
   ensureStoreFile();
-  fs.writeFileSync(storePath, JSON.stringify(next, null, 2));
+  fs.writeFileSync(
+    storePath,
+    JSON.stringify(
+      {
+        oauthStates: next.oauthStates,
+        sessions: next.sessions,
+        subscriptions: next.subscriptions,
+        tasks: next.tasks,
+        users: next.users,
+      },
+      null,
+      2
+    )
+  );
 }
 
-function mutateDatabase<T>(mutator: (database: DatabaseShape) => T): T {
+function mutateDatabase<T>(mutator: (database: IndexedDatabase) => T): T {
   const database = readDatabase();
   const result = mutator(database);
   writeDatabase(database);
@@ -158,6 +306,7 @@ export function upsertGoogleUser(input: {
       existing.name = input.name;
       existing.providerAccountId = input.providerAccountId;
       existing.updatedAt = now;
+      updateIndexesOnWrite(database, 'user', existing);
       return existing;
     }
 
@@ -173,6 +322,7 @@ export function upsertGoogleUser(input: {
     };
 
     database.users.push(created);
+    updateIndexesOnWrite(database, 'user', created);
     return created;
   });
 }
@@ -353,6 +503,7 @@ export function createTaskForUser(
     };
 
     database.tasks.push(task);
+    updateIndexesOnWrite(database, 'task', task);
     return task;
   });
 }
@@ -369,14 +520,21 @@ export function updateTaskForUser(
     }
 
     Object.assign(task, input, { updatedAt: new Date().toISOString() });
+    updateIndexesOnWrite(database, 'task', task);
     return task;
   });
 }
 
 export function deleteTaskForUser(userId: string, taskId: string) {
   return mutateDatabase((database) => {
+    const deletedTask = database.tasks.find((task) => task.id === taskId && task.userId === userId) ?? null;
     const beforeCount = database.tasks.length;
     database.tasks = database.tasks.filter((task) => !(task.id === taskId && task.userId === userId));
+
+    if (deletedTask) {
+      updateIndexesOnWrite(database, 'task', deletedTask);
+    }
+
     return database.tasks.length !== beforeCount;
   });
 }
@@ -412,6 +570,10 @@ export function importTasksForUser(
       database.tasks.push(task);
       created.push(task);
       existingSignatures.add(signature);
+    }
+
+    if (created.length > 0) {
+      updateIndexesOnWrite(database, 'task', { userId } satisfies Pick<StoredTask, 'userId'>);
     }
 
     return created;
@@ -455,6 +617,7 @@ export function upsertSubscriptionForUser(
       existing.currentPeriodEnd = input.currentPeriodEnd;
       existing.cancelAtPeriodEnd = input.cancelAtPeriodEnd;
       existing.updatedAt = now;
+      updateIndexesOnWrite(database, 'subscription', existing);
       return existing;
     }
 
@@ -466,6 +629,7 @@ export function upsertSubscriptionForUser(
     };
 
     database.subscriptions.push(created);
+    updateIndexesOnWrite(database, 'subscription', created);
     return created;
   });
 }
