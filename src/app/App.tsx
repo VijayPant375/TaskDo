@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { Bell, Crown, LogOut, Moon, Plus, Settings, Sparkles, Sun, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { SubscriptionProvider, useSubscription } from '../context/SubscriptionContext';
-import { createTask, deleteTask, fetchTasks, updateTask } from '../services/tasks';
 import { FREE_TASK_LIMIT } from '../types/subscription';
-import type { Task } from '../types/task';
 import { AddEditTaskScreen } from './components/AddEditTaskScreen';
 import { AuthLandingScreen } from './components/AuthLandingScreen';
 import { NotificationsScreen } from './components/NotificationsScreen';
@@ -13,8 +10,12 @@ import { PremiumBadge } from './components/PremiumBadge';
 import { SettingsScreen } from './components/SettingsScreen';
 import { SuccessScreen } from './components/SuccessScreen';
 import { TaskCard } from './components/TaskCard';
+import { TaskListSkeleton } from './components/TaskListSkeleton';
 import { UpgradeModal } from './components/UpgradeModal';
 import { Button } from './components/ui/button';
+import { useAlarmManager } from './hooks/useAlarmManager';
+import { useAppScreenState } from './hooks/useAppScreenState';
+import { useTaskManager } from './hooks/useTaskManager';
 
 function AppContent() {
   const { theme, setTheme } = useTheme();
@@ -27,232 +28,41 @@ function AppContent() {
     signOut,
     user,
   } = useAuth();
-
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [currentScreen, setCurrentScreen] = useState<
-    'home' | 'add' | 'edit' | 'notifications' | 'settings' | 'success'
-  >('home');
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [checkoutSessionId, setCheckoutSessionId] = useState<string | null>(null);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [upgradeModalTrigger, setUpgradeModalTrigger] = useState<'manual' | 'task_limit' | 'feature_locked'>('manual');
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-  const [alarmingTask, setAlarmingTask] = useState<Task | null>(null);
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
-  const [alarmInterval, setAlarmInterval] = useState<number | null>(null);
-  const [isTasksLoading, setIsTasksLoading] = useState(false);
-
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const checkoutState = searchParams.get('checkout');
-    const sessionId = searchParams.get('session_id');
-
-    if (checkoutState === 'success' && sessionId) {
-      setCheckoutSessionId(sessionId);
-      setCurrentScreen('success');
-      return;
-    }
-
-    if (checkoutState === 'canceled') {
-      setUpgradeModalTrigger('manual');
-      setShowUpgradeModal(true);
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthLoading) {
-      return;
-    }
-
-    if (!isAuthenticated) {
-      setTasks([]);
-      return;
-    }
-
-    const loadAuthenticatedTasks = async () => {
-      setIsTasksLoading(true);
-
+  const {
+    beginAddTask,
+    beginEditTask,
+    checkoutSessionId,
+    closeUpgradeModal,
+    completeCheckoutFlow,
+    currentScreen,
+    editingTask,
+    finishTaskEditor,
+    openUpgradeModal,
+    setCurrentScreen,
+    showUpgradeModal,
+    upgradeModalTrigger,
+  } = useAppScreenState();
+  const {
+    activeTasks,
+    clearCompletedTasks,
+    completedTasks,
+    groupedTasks,
+    isTasksLoading,
+    persistTaskUpdate,
+    removeTask,
+    saveTask,
+    tasks,
+  } = useTaskManager(isAuthenticated, isAuthLoading);
+  const { alarmingTask, dismissAlarm, snoozeAlarm } = useAlarmManager({
+    onSnoozeTask: async (task, alarmTime) => {
       try {
-        const remoteTasks = await fetchTasks();
-        setTasks(remoteTasks);
+        await persistTaskUpdate({ ...task, alarmTime: new Date(alarmTime) });
       } catch (error) {
-        console.error('Failed to sync tasks for the authenticated user.', error);
-      } finally {
-        setIsTasksLoading(false);
+        console.error('Failed to snooze task alarm.', error);
       }
-    };
-
-    void loadAuthenticatedTasks();
-  }, [isAuthenticated, isAuthLoading]);
-
-  useEffect(() => {
-    if ('Notification' in window) {
-      setNotificationPermission(Notification.permission);
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then((permission) => {
-          setNotificationPermission(permission);
-        });
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const checkAlarms = () => {
-      const now = new Date();
-
-      tasks.forEach((task) => {
-        if (!task.completed && task.notificationEnabled && task.alarmTime) {
-          const alarmTime = new Date(task.alarmTime);
-          const timeDiff = alarmTime.getTime() - now.getTime();
-
-          if (timeDiff <= 60000 && timeDiff > 0) {
-            triggerAlarm(task);
-          }
-        }
-      });
-    };
-
-    checkAlarms();
-    const interval = setInterval(checkAlarms, 30000);
-    return () => clearInterval(interval);
-  }, [tasks, alarmingTask, notificationPermission]);
-
-  const triggerAlarm = (task: Task) => {
-    if (alarmingTask) {
-      return;
-    }
-
-    setAlarmingTask(task);
-
-    if ('Notification' in window && notificationPermission === 'granted') {
-      const notification = new Notification('Task Do - Reminder', {
-        body: `${task.name}\n${task.description || 'No description'}`,
-        icon: '/favicon.ico',
-        tag: task.id,
-        requireInteraction: true,
-      });
-
-      notification.onclick = () => {
-        window.focus();
-        notification.close();
-      };
-    }
-
-    startAlarmSound();
-  };
-
-  const startAlarmSound = () => {
-    try {
-      const AudioCtor =
-        window.AudioContext ||
-        (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-      if (!AudioCtor) {
-        return;
-      }
-
-      const context = new AudioCtor();
-      setAudioContext(context);
-
-      const playMelody = () => {
-        const notes = [523.25, 659.25, 783.99, 659.25];
-        const noteDuration = 0.4;
-        const noteGap = 0.1;
-        let time = context.currentTime;
-
-        notes.forEach((frequency) => {
-          const oscillator = context.createOscillator();
-          const gainNode = context.createGain();
-
-          oscillator.connect(gainNode);
-          gainNode.connect(context.destination);
-
-          oscillator.frequency.value = frequency;
-          oscillator.type = 'sine';
-
-          gainNode.gain.setValueAtTime(0, time);
-          gainNode.gain.linearRampToValueAtTime(0.6, time + 0.05);
-          gainNode.gain.linearRampToValueAtTime(0.5, time + noteDuration - 0.1);
-          gainNode.gain.linearRampToValueAtTime(0, time + noteDuration);
-
-          oscillator.start(time);
-          oscillator.stop(time + noteDuration);
-
-          time += noteDuration + noteGap;
-        });
-      };
-
-      playMelody();
-
-      const interval = window.setInterval(() => {
-        playMelody();
-      }, 2000);
-
-      setAlarmInterval(interval);
-    } catch (error) {
-      console.log('Audio alert not available', error);
-    }
-  };
-
-  const stopAlarmSound = () => {
-    if (alarmInterval) {
-      clearInterval(alarmInterval);
-      setAlarmInterval(null);
-    }
-
-    if (audioContext) {
-      void audioContext.close();
-      setAudioContext(null);
-    }
-  };
-
-  const persistTaskUpdate = async (nextTask: Task) => {
-    try {
-      const updated = await updateTask(nextTask);
-      setTasks((prev) => prev.map((task) => (task.id === updated.id ? updated : task)));
-    } catch (error) {
-      console.error('Failed to update task.', error);
-    }
-  };
-
-  const dismissAlarm = () => {
-    stopAlarmSound();
-    setAlarmingTask(null);
-  };
-
-  const snoozeAlarm = () => {
-    stopAlarmSound();
-
-    if (alarmingTask) {
-      const newAlarmTime = new Date(Date.now() + 5 * 60 * 1000);
-      void persistTaskUpdate({ ...alarmingTask, alarmTime: newAlarmTime });
-    }
-
-    setAlarmingTask(null);
-  };
-
-  const sortedTasks = useMemo(() => {
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-
-    return [...tasks].sort((a, b) => {
-      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
-      }
-
-      return a.deadline.getTime() - b.deadline.getTime();
-    });
-  }, [tasks]);
-
-  const groupedTasks = useMemo(
-    () => ({
-      high: sortedTasks.filter((task) => task.priority === 'high' && !task.completed),
-      medium: sortedTasks.filter((task) => task.priority === 'medium' && !task.completed),
-      low: sortedTasks.filter((task) => task.priority === 'low' && !task.completed),
-      completed: sortedTasks.filter((task) => task.completed),
-    }),
-    [sortedTasks]
-  );
+    },
+    tasks,
+  });
 
   const handleToggleComplete = (id: string) => {
     const target = tasks.find((task) => task.id === id);
@@ -260,59 +70,42 @@ function AppContent() {
       return;
     }
 
-    void persistTaskUpdate({ ...target, completed: !target.completed });
+    void persistTaskUpdate({ ...target, completed: !target.completed }).catch((error) => {
+      console.error('Failed to update task.', error);
+    });
   };
 
   const handleDelete = (id: string) => {
-    void (async () => {
-      try {
-        await deleteTask(id);
-        setTasks((prev) => prev.filter((task) => task.id !== id));
-      } catch (error) {
-        console.error('Failed to delete task.', error);
-      }
-    })();
-  };
-
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-    setCurrentScreen('edit');
+    void removeTask(id).catch((error) => {
+      console.error('Failed to delete task.', error);
+    });
   };
 
   const handleAddTask = () => {
-    const activeTaskCount = tasks.filter((task) => !task.completed).length;
-
-    if (!canCreateTask(activeTaskCount)) {
-      setUpgradeModalTrigger('task_limit');
-      setShowUpgradeModal(true);
+    if (!canCreateTask(activeTasks.length)) {
+      openUpgradeModal('task_limit');
       return;
     }
 
-    setCurrentScreen('add');
+    beginAddTask();
   };
 
-  const handleSaveTask = (taskData: Omit<Task, 'id'>) => {
-    void (async () => {
-      try {
-        if (editingTask) {
-          const updatedTask = await updateTask({ ...taskData, id: editingTask.id });
-          setTasks((prev) => prev.map((task) => (task.id === updatedTask.id ? updatedTask : task)));
-        } else {
-          const createdTask = await createTask(taskData);
-          setTasks((prev) => [...prev, createdTask]);
+  const handleSaveTask = (taskData: Omit<(typeof tasks)[number], 'id'>) => {
+    void saveTask(taskData, editingTask)
+      .then(() => {
+        finishTaskEditor();
+      })
+      .catch((error) => {
+        if (
+          error instanceof Error &&
+          error.message.toLowerCase().includes('free plan task limit reached')
+        ) {
+          openUpgradeModal('task_limit');
+          return;
         }
 
-        setCurrentScreen('home');
-        setEditingTask(null);
-      } catch (error) {
         console.error('Failed to save task.', error);
-      }
-    })();
-  };
-
-  const handleCancelEdit = () => {
-    setCurrentScreen('home');
-    setEditingTask(null);
+      });
   };
 
   const handleToggleNotification = (id: string) => {
@@ -324,33 +117,21 @@ function AppContent() {
     void persistTaskUpdate({
       ...target,
       notificationEnabled: !target.notificationEnabled,
+    }).catch((error) => {
+      console.error('Failed to update task notification.', error);
     });
   };
 
   const handleClearCompleted = () => {
-    void (async () => {
-      try {
-        const completedTaskIds = tasks.filter((task) => task.completed).map((task) => task.id);
-        await Promise.all(completedTaskIds.map((taskId) => deleteTask(taskId)));
-        setTasks((prev) => prev.filter((task) => !task.completed));
-      } catch (error) {
-        console.error('Failed to clear completed tasks.', error);
-      }
-    })();
-  };
-
-  const handleSuccessContinue = () => {
-    setCheckoutSessionId(null);
-    setCurrentScreen('home');
-    window.history.replaceState({}, '', window.location.pathname);
+    void clearCompletedTasks().catch((error) => {
+      console.error('Failed to clear completed tasks.', error);
+    });
   };
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
 
-  const activeTasks = tasks.filter((task) => !task.completed);
-  const completedTasks = tasks.filter((task) => task.completed);
   const taskLimitReached = !isPremium && activeTasks.length >= FREE_TASK_LIMIT;
   const prioritySummary = [
     { label: 'High priority', value: groupedTasks.high.length, tone: 'text-red-500' },
@@ -360,7 +141,7 @@ function AppContent() {
   const userInitial = user?.name?.charAt(0).toUpperCase() ?? 'T';
 
   if (currentScreen === 'success' && checkoutSessionId) {
-    return <SuccessScreen onContinue={handleSuccessContinue} sessionId={checkoutSessionId} />;
+    return <SuccessScreen onContinue={completeCheckoutFlow} sessionId={checkoutSessionId} />;
   }
 
   if (isAuthLoading) {
@@ -415,10 +196,7 @@ function AppContent() {
                   {!isPremium ? (
                     <Button
                       className="h-10 bg-gradient-to-r from-amber-500 to-orange-500 px-4 hover:from-amber-600 hover:to-orange-600"
-                      onClick={() => {
-                        setUpgradeModalTrigger('manual');
-                        setShowUpgradeModal(true);
-                      }}
+                      onClick={() => openUpgradeModal('manual')}
                       size="sm"
                     >
                       <Crown className="mr-2 h-4 w-4" />
@@ -500,10 +278,7 @@ function AppContent() {
                       </div>
                       <Button
                         className="h-9 shrink-0 px-3"
-                        onClick={() => {
-                          setUpgradeModalTrigger(taskLimitReached ? 'task_limit' : 'manual');
-                          setShowUpgradeModal(true);
-                        }}
+                        onClick={() => openUpgradeModal(taskLimitReached ? 'task_limit' : 'manual')}
                         variant={taskLimitReached ? 'default' : 'outline'}
                       >
                         Upgrade
@@ -525,7 +300,6 @@ function AppContent() {
                   </div>
                 )}
               </div>
-
             </aside>
 
             <section className="min-w-0">
@@ -537,8 +311,8 @@ function AppContent() {
                       {isTasksLoading
                         ? 'Loading your tasks...'
                         : activeTasks.length === 0
-                        ? 'You are clear for now. Add a task when something new comes up.'
-                        : `${activeTasks.length} active task${activeTasks.length === 1 ? '' : 's'} across your current priorities.`}
+                          ? 'You are clear for now. Add a task when something new comes up.'
+                          : `${activeTasks.length} active task${activeTasks.length === 1 ? '' : 's'} across your current priorities.`}
                     </p>
                   </div>
 
@@ -547,6 +321,8 @@ function AppContent() {
                   </div>
                 </div>
               </div>
+
+              {isTasksLoading ? <TaskListSkeleton /> : null}
 
               {activeTasks.length === 0 && !isTasksLoading ? (
                 <div className="surface-panel rounded-[1.9rem] border border-white/20 px-4 py-12 text-center shadow-sm sm:px-6">
@@ -564,95 +340,98 @@ function AppContent() {
                   </p>
                 </div>
               ) : null}
-              <div className="space-y-6">
-                {groupedTasks.high.length > 0 ? (
-                  <div>
-                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      High Priority
-                    </h2>
-                    <div className="space-y-3">
-                      {groupedTasks.high.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onToggleComplete={handleToggleComplete}
-                          onDelete={handleDelete}
-                          onEdit={handleEdit}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
 
-                {groupedTasks.medium.length > 0 ? (
-                  <div>
-                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      Medium Priority
-                    </h2>
-                    <div className="space-y-3">
-                      {groupedTasks.medium.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onToggleComplete={handleToggleComplete}
-                          onDelete={handleDelete}
-                          onEdit={handleEdit}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {groupedTasks.low.length > 0 ? (
-                  <div>
-                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                      Low Priority
-                    </h2>
-                    <div className="space-y-3">
-                      {groupedTasks.low.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onToggleComplete={handleToggleComplete}
-                          onDelete={handleDelete}
-                          onEdit={handleEdit}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {completedTasks.length > 0 ? (
-                  <div className="surface-panel rounded-[1.9rem] border border-white/20 p-4 shadow-sm sm:p-5">
-                    <div className="mb-3 flex items-center justify-between">
-                      <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                        Completed
+              {!isTasksLoading ? (
+                <div className="space-y-6">
+                  {groupedTasks.high.length > 0 ? (
+                    <div>
+                      <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        High Priority
                       </h2>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleClearCompleted}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Clear All
-                      </Button>
+                      <div className="space-y-3">
+                        {groupedTasks.high.map((task) => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDelete}
+                            onEdit={beginEditTask}
+                          />
+                        ))}
+                      </div>
                     </div>
+                  ) : null}
 
-                    <div className="space-y-3">
-                      {completedTasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onToggleComplete={handleToggleComplete}
-                          onDelete={handleDelete}
-                          onEdit={handleEdit}
-                        />
-                      ))}
+                  {groupedTasks.medium.length > 0 ? (
+                    <div>
+                      <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Medium Priority
+                      </h2>
+                      <div className="space-y-3">
+                        {groupedTasks.medium.map((task) => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDelete}
+                            onEdit={beginEditTask}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
-              </div>
+                  ) : null}
+
+                  {groupedTasks.low.length > 0 ? (
+                    <div>
+                      <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Low Priority
+                      </h2>
+                      <div className="space-y-3">
+                        {groupedTasks.low.map((task) => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDelete}
+                            onEdit={beginEditTask}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {completedTasks.length > 0 ? (
+                    <div className="surface-panel rounded-[1.9rem] border border-white/20 p-4 shadow-sm sm:p-5">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                          Completed
+                        </h2>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleClearCompleted}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Clear All
+                        </Button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {completedTasks.map((task) => (
+                          <TaskCard
+                            key={task.id}
+                            task={task}
+                            onToggleComplete={handleToggleComplete}
+                            onDelete={handleDelete}
+                            onEdit={beginEditTask}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </section>
           </div>
 
@@ -673,11 +452,7 @@ function AppContent() {
       )}
 
       {(currentScreen === 'add' || currentScreen === 'edit') && (
-        <AddEditTaskScreen
-          task={editingTask}
-          onSave={handleSaveTask}
-          onCancel={handleCancelEdit}
-        />
+        <AddEditTaskScreen task={editingTask} onSave={handleSaveTask} onCancel={finishTaskEditor} />
       )}
 
       {currentScreen === 'notifications' && (
@@ -694,25 +469,19 @@ function AppContent() {
           onClose={() => setCurrentScreen('home')}
           onUpgrade={() => {
             setCurrentScreen('home');
-            setUpgradeModalTrigger('manual');
-            setShowUpgradeModal(true);
+            openUpgradeModal('manual');
           }}
         />
       )}
 
-      {showUpgradeModal ? (
-        <UpgradeModal
-          onClose={() => setShowUpgradeModal(false)}
-          trigger={upgradeModalTrigger}
-        />
-      ) : null}
+      {showUpgradeModal ? <UpgradeModal onClose={closeUpgradeModal} trigger={upgradeModalTrigger} /> : null}
 
       {alarmingTask ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 animate-pulse">
-          <div className="w-full max-w-sm rounded-3xl border-4 border-red-500 bg-background p-8 shadow-2xl animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 z-50 flex animate-pulse items-center justify-center bg-black/80 p-4">
+          <div className="animate-in fade-in zoom-in w-full max-w-sm rounded-3xl border-4 border-red-500 bg-background p-8 shadow-2xl duration-300">
             <div className="mb-6 flex justify-center">
               <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
+                <div className="absolute inset-0 animate-ping rounded-full bg-red-500/20" />
                 <div className="relative rounded-full bg-red-500 p-6">
                   <Bell className="h-12 w-12 animate-bounce text-white" />
                 </div>

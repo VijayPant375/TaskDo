@@ -37,6 +37,19 @@ export interface StoredSession {
   lastUsedAt: string;
 }
 
+export interface StoredSubscription {
+  userId: string;
+  tier: 'free' | 'premium';
+  status: string;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  billingPeriod: 'monthly' | 'yearly' | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StoredOAuthState {
   state: string;
   codeVerifier: string;
@@ -47,6 +60,7 @@ export interface StoredOAuthState {
 interface DatabaseShape {
   oauthStates: StoredOAuthState[];
   sessions: StoredSession[];
+  subscriptions: StoredSubscription[];
   tasks: StoredTask[];
   users: StoredUser[];
 }
@@ -59,6 +73,7 @@ const storePath = path.join(dataDirectory, 'store.json');
 const emptyDatabase: DatabaseShape = {
   oauthStates: [],
   sessions: [],
+  subscriptions: [],
   tasks: [],
   users: [],
 };
@@ -83,6 +98,7 @@ function readDatabase(): DatabaseShape {
     return {
       oauthStates: parsed.oauthStates ?? [],
       sessions: parsed.sessions ?? [],
+      subscriptions: parsed.subscriptions ?? [],
       tasks: parsed.tasks ?? [],
       users: parsed.users ?? [],
     };
@@ -236,6 +252,10 @@ export function listTasksByUser(userId: string) {
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
+export function countActiveTasksByUser(userId: string) {
+  return readDatabase().tasks.filter((task) => task.userId === userId && !task.completed).length;
+}
+
 export function createTaskForUser(
   userId: string,
   input: Omit<StoredTask, 'createdAt' | 'id' | 'updatedAt' | 'userId'>
@@ -312,6 +332,58 @@ export function importTasksForUser(
       existingSignatures.add(signature);
     }
 
+    return created;
+  });
+}
+
+export function getSubscriptionByUserId(userId: string) {
+  return readDatabase().subscriptions.find((subscription) => subscription.userId === userId) ?? null;
+}
+
+export function getSubscriptionByStripeCustomerId(customerId: string) {
+  return (
+    readDatabase().subscriptions.find((subscription) => subscription.stripeCustomerId === customerId) ??
+    null
+  );
+}
+
+export function getSubscriptionByStripeSubscriptionId(subscriptionId: string) {
+  return (
+    readDatabase().subscriptions.find(
+      (subscription) => subscription.stripeSubscriptionId === subscriptionId
+    ) ?? null
+  );
+}
+
+export function upsertSubscriptionForUser(
+  userId: string,
+  input: Omit<StoredSubscription, 'createdAt' | 'updatedAt' | 'userId'>
+) {
+  return mutateDatabase((database) => {
+    const now = new Date().toISOString();
+    const existing =
+      database.subscriptions.find((subscription) => subscription.userId === userId) ?? null;
+
+    if (existing) {
+      existing.tier = input.tier;
+      existing.status = input.status;
+      existing.stripeCustomerId = input.stripeCustomerId;
+      existing.stripeSubscriptionId = input.stripeSubscriptionId;
+      existing.billingPeriod = input.billingPeriod;
+      existing.currentPeriodEnd = input.currentPeriodEnd;
+      existing.cancelAtPeriodEnd = input.cancelAtPeriodEnd;
+      existing.updatedAt = now;
+      return existing;
+    }
+
+    const created: StoredSubscription = {
+      ...input,
+      createdAt: now,
+      updatedAt: now,
+      userId,
+    };
+
+    database.subscriptions.push(created);
     return created;
   });
 }

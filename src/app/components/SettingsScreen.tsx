@@ -36,7 +36,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
     }
 
     try {
-      await openCustomerPortal(subscriptionStatus.stripeCustomerId);
+      await openCustomerPortal();
     } catch (error) {
       console.error('Failed to open Stripe Customer Portal.', error);
       window.alert('Unable to open subscription management right now.');

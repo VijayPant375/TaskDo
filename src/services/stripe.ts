@@ -1,6 +1,5 @@
-import { PRICING, type BillingPeriod } from '../types/subscription';
-
-const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
+import { apiGet, apiPost } from './api';
+import { PRICING, type BillingPeriod, type SubscriptionStatus } from '../types/subscription';
 
 interface CheckoutSessionResponse {
   url: string;
@@ -18,33 +17,6 @@ interface PortalSessionResponse {
   url: string;
 }
 
-export interface SubscriptionStatusResponse {
-  billingPeriod: BillingPeriod | null;
-  cancelAtPeriodEnd: boolean;
-  currentPeriodEnd: number | null;
-  customerId: string;
-  isPremium: boolean;
-  status: string;
-  subscriptionId: string;
-}
-
-async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse> {
-  const response = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `Request failed with status ${response.status}`);
-  }
-
-  return response.json() as Promise<TResponse>;
-}
-
 export async function redirectToCheckout(billingPeriod: BillingPeriod) {
   const priceId = PRICING[billingPeriod].priceId;
 
@@ -58,23 +30,26 @@ export async function redirectToCheckout(billingPeriod: BillingPeriod) {
     cancelUrl: `${window.location.origin}/?checkout=canceled`,
   };
 
-  const session = await postJson<CheckoutSessionResponse>('/api/create-checkout-session', payload);
+  const session = await apiPost<CheckoutSessionResponse>('/api/create-checkout-session', payload);
   window.location.assign(session.url);
 }
 
 export function verifySubscription(sessionId: string) {
-  return postJson<VerifySubscriptionResponse>('/api/verify-subscription', { sessionId });
+  return apiPost<VerifySubscriptionResponse>('/api/verify-subscription', { sessionId });
 }
 
-export async function openCustomerPortal(customerId: string) {
-  const session = await postJson<PortalSessionResponse>('/api/create-portal-session', {
-    customerId,
+export async function openCustomerPortal() {
+  const session = await apiPost<PortalSessionResponse>('/api/create-portal-session', {
     returnUrl: window.location.origin,
   });
 
   window.location.assign(session.url);
 }
 
-export function fetchSubscriptionStatus(subscriptionId: string) {
-  return postJson<SubscriptionStatusResponse>('/api/subscription-status', { subscriptionId });
+export function fetchCurrentSubscription() {
+  return apiGet<SubscriptionStatus>('/api/subscription');
+}
+
+export function refreshCurrentSubscription() {
+  return apiPost<SubscriptionStatus>('/api/subscription/refresh');
 }

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
 import {
   accessCookieName,
@@ -14,11 +15,15 @@ import {
 } from './lib/cookies.js';
 import {
   consumeOAuthState,
+  countActiveTasksByUser,
   createSession,
   createTaskForUser,
   deleteSession,
   deleteTaskForUser,
   getSessionById,
+  getSubscriptionByStripeCustomerId,
+  getSubscriptionByStripeSubscriptionId,
+  getSubscriptionByUserId,
   getUserById,
   importTasksForUser,
   listTasksByUser,
@@ -28,6 +33,7 @@ import {
   updateSessionRefreshToken,
   updateTaskForUser,
   upsertGoogleUser,
+  upsertSubscriptionForUser,
 } from './lib/store.js';
 import {
   createCodeChallenge,
@@ -59,6 +65,7 @@ const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const currentFilePath = fileURLToPath(import.meta.url);
 const serverDirectory = path.dirname(currentFilePath);
 const frontendDistDirectory = path.resolve(serverDirectory, '..', '..', 'dist');
+const freeTaskLimit = 50;
 
 interface AuthenticatedRequest extends Request {
   authUser?: {
@@ -69,10 +76,11 @@ interface AuthenticatedRequest extends Request {
 function getSubscriptionPayload(subscription: Stripe.Subscription) {
   const status = subscription.status;
   const isPremium = status === 'active' || status === 'trialing';
+  const billingPeriod =
+    subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly';
 
   return {
-    billingPeriod:
-      subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'yearly' : 'monthly',
+    billingPeriod: billingPeriod as 'monthly' | 'yearly',
     cancelAtPeriodEnd: subscription.cancel_at_period_end,
     currentPeriodEnd: subscription.items.data[0]?.current_period_end ?? null,
     customerId:
@@ -165,6 +173,92 @@ function sanitizeTask(task: {
   };
 }
 
+function serializeSubscriptionForClient(userId: string) {
+  const subscription = getSubscriptionByUserId(userId);
+
+  if (!subscription) {
+    return {
+      tier: 'free' as const,
+    };
+  }
+
+  return {
+    tier: subscription.tier,
+    stripeCustomerId: subscription.stripeCustomerId ?? undefined,
+    stripeSubscriptionId: subscription.stripeSubscriptionId ?? undefined,
+    billingPeriod: subscription.billingPeriod ?? undefined,
+    currentPeriodEnd: subscription.currentPeriodEnd ?? undefined,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+  };
+}
+
+function isPremiumUser(userId: string) {
+  return serializeSubscriptionForClient(userId).tier === 'premium';
+}
+
+function persistSubscriptionForUser(userId: string, subscription: Stripe.Subscription) {
+  const payload = getSubscriptionPayload(subscription);
+
+  return upsertSubscriptionForUser(userId, {
+    billingPeriod: payload.billingPeriod,
+    cancelAtPeriodEnd: payload.cancelAtPeriodEnd,
+    currentPeriodEnd: payload.currentPeriodEnd
+      ? new Date(payload.currentPeriodEnd * 1000).toISOString()
+      : null,
+    status: payload.status,
+    stripeCustomerId: payload.customerId,
+    stripeSubscriptionId: payload.subscriptionId,
+    tier: payload.isPremium ? 'premium' : 'free',
+  });
+}
+
+async function syncSubscriptionForUser(userId: string) {
+  const stored = getSubscriptionByUserId(userId);
+
+  if (!stored?.stripeSubscriptionId || !stripe) {
+    return serializeSubscriptionForClient(userId);
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(stored.stripeSubscriptionId);
+  persistSubscriptionForUser(userId, subscription);
+  return serializeSubscriptionForClient(userId);
+}
+
+async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  if (session.mode !== 'subscription' || !session.subscription || !stripe) {
+    return;
+  }
+
+  const userId = session.client_reference_id ?? session.metadata?.userId;
+  if (!userId) {
+    return;
+  }
+
+  const subscription =
+    typeof session.subscription === 'string'
+      ? await stripe.subscriptions.retrieve(session.subscription)
+      : session.subscription;
+
+  persistSubscriptionForUser(userId, subscription);
+}
+
+async function handleSubscriptionChanged(subscription: Stripe.Subscription) {
+  const userIdFromMetadata = subscription.metadata.userId;
+  const customerId =
+    typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+
+  const matchedSubscription =
+    getSubscriptionByStripeSubscriptionId(subscription.id) ??
+    getSubscriptionByStripeCustomerId(customerId);
+  const userId = userIdFromMetadata || matchedSubscription?.userId;
+
+  if (!userId) {
+    return;
+  }
+
+  persistSubscriptionForUser(userId, subscription);
+}
+
 async function exchangeGoogleCodeForProfile(code: string, codeVerifier: string) {
   const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
     body: new URLSearchParams({
@@ -229,7 +323,21 @@ function requireAuth(request: AuthenticatedRequest, response: Response, next: Ne
   next();
 }
 
-app.post('/api/webhook', express.raw({ type: 'application/json' }), (request, response) => {
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
   if (!requireStripe(response)) {
     return;
   }
@@ -252,9 +360,11 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (request, re
 
     switch (event.type) {
       case 'checkout.session.completed':
+        await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+        break;
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
-        console.log(`Received Stripe event: ${event.type}`);
+        await handleSubscriptionChanged(event.data.object as Stripe.Subscription);
         break;
       default:
         console.log(`Unhandled Stripe event: ${event.type}`);
@@ -274,6 +384,8 @@ app.use(
   })
 );
 app.use(express.json());
+app.use('/api/auth/', authLimiter);
+app.use('/api/', apiLimiter);
 
 app.use((_request, _response, next) => {
   pruneExpiredOAuthStates();
@@ -460,6 +572,19 @@ app.post('/api/auth/logout', (request, response) => {
   response.status(204).send();
 });
 
+app.get('/api/subscription', requireAuth, (request: AuthenticatedRequest, response) => {
+  response.json(serializeSubscriptionForClient(request.authUser!.id));
+});
+
+app.post('/api/subscription/refresh', requireAuth, async (request: AuthenticatedRequest, response) => {
+  try {
+    response.json(await syncSubscriptionForUser(request.authUser!.id));
+  } catch (error) {
+    console.error('Failed to refresh stored subscription state.', error);
+    response.status(500).send('Unable to refresh subscription state.');
+  }
+});
+
 app.get('/api/tasks', requireAuth, (request: AuthenticatedRequest, response) => {
   response.json(listTasksByUser(request.authUser!.id));
 });
@@ -471,7 +596,15 @@ app.post('/api/tasks', requireAuth, (request: AuthenticatedRequest, response) =>
     return;
   }
 
-  const task = createTaskForUser(request.authUser!.id, sanitized.value);
+  const userId = request.authUser!.id;
+  const wouldBeActiveTask = !sanitized.value.completed;
+
+  if (!isPremiumUser(userId) && wouldBeActiveTask && countActiveTasksByUser(userId) >= freeTaskLimit) {
+    response.status(403).send('Free plan task limit reached. Upgrade to Premium to add more active tasks.');
+    return;
+  }
+
+  const task = createTaskForUser(userId, sanitized.value);
   response.status(201).json(task);
 });
 
@@ -523,11 +656,22 @@ app.post('/api/tasks/import', requireAuth, (request: AuthenticatedRequest, respo
     sanitizedTasks.push(sanitized.value);
   }
 
-  const imported = importTasksForUser(request.authUser!.id, sanitizedTasks);
+  const userId = request.authUser!.id;
+  const activeImportCount = sanitizedTasks.filter((task) => !task.completed).length;
+
+  if (
+    !isPremiumUser(userId) &&
+    countActiveTasksByUser(userId) + activeImportCount > freeTaskLimit
+  ) {
+    response.status(403).send('Free plan task limit reached. Upgrade to Premium to import more active tasks.');
+    return;
+  }
+
+  const imported = importTasksForUser(userId, sanitizedTasks);
   response.status(201).json(imported);
 });
 
-app.post('/api/create-checkout-session', async (request, response) => {
+app.post('/api/create-checkout-session', requireAuth, async (request: AuthenticatedRequest, response) => {
   if (!requireStripe(response)) {
     return;
   }
@@ -544,6 +688,13 @@ app.post('/api/create-checkout-session', async (request, response) => {
       return;
     }
 
+    const user = getUserById(request.authUser!.id);
+    if (!user) {
+      response.status(401).send('Authentication required.');
+      return;
+    }
+
+    const storedSubscription = getSubscriptionByUserId(user.id);
     const priceId =
       billingPeriod === 'monthly'
         ? (process.env.STRIPE_MONTHLY_PRICE_ID as string)
@@ -559,9 +710,18 @@ app.post('/api/create-checkout-session', async (request, response) => {
       ],
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
+      client_reference_id: user.id,
+      customer: storedSubscription?.stripeCustomerId ?? undefined,
+      customer_email: storedSubscription?.stripeCustomerId ? undefined : user.email,
       metadata: {
         billingPeriod,
         product: 'taskdo-premium',
+        userId: user.id,
+      },
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+        },
       },
       success_url: successUrl || `${frontendUrl}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${frontendUrl}/?checkout=canceled`,
@@ -576,7 +736,7 @@ app.post('/api/create-checkout-session', async (request, response) => {
   }
 });
 
-app.post('/api/verify-subscription', async (request, response) => {
+app.post('/api/verify-subscription', requireAuth, async (request: AuthenticatedRequest, response) => {
   if (!requireStripe(response)) {
     return;
   }
@@ -603,11 +763,18 @@ app.post('/api/verify-subscription', async (request, response) => {
       return;
     }
 
+    const sessionUserId = session.client_reference_id ?? session.metadata?.userId;
+    if (sessionUserId && sessionUserId !== request.authUser!.id) {
+      response.status(403).send('Checkout session does not belong to the authenticated user.');
+      return;
+    }
+
     const subscription =
       typeof session.subscription === 'string'
         ? await stripe!.subscriptions.retrieve(session.subscription)
         : session.subscription;
 
+    persistSubscriptionForUser(request.authUser!.id, subscription);
     response.json(getSubscriptionPayload(subscription));
   } catch (error) {
     console.error('Failed to verify Stripe subscription.', error);
@@ -615,45 +782,24 @@ app.post('/api/verify-subscription', async (request, response) => {
   }
 });
 
-app.post('/api/subscription-status', async (request, response) => {
+app.post('/api/create-portal-session', requireAuth, async (request: AuthenticatedRequest, response) => {
   if (!requireStripe(response)) {
     return;
   }
 
   try {
-    const { subscriptionId } = request.body as { subscriptionId?: string };
-
-    if (!subscriptionId) {
-      response.status(400).send('subscriptionId is required.');
-      return;
-    }
-
-    const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
-    response.json(getSubscriptionPayload(subscription));
-  } catch (error) {
-    console.error('Failed to fetch Stripe subscription status.', error);
-    response.status(500).send('Unable to fetch subscription status.');
-  }
-});
-
-app.post('/api/create-portal-session', async (request, response) => {
-  if (!requireStripe(response)) {
-    return;
-  }
-
-  try {
-    const { customerId, returnUrl } = request.body as {
-      customerId?: string;
+    const { returnUrl } = request.body as {
       returnUrl?: string;
     };
+    const subscription = getSubscriptionByUserId(request.authUser!.id);
 
-    if (!customerId) {
-      response.status(400).send('customerId is required.');
+    if (!subscription?.stripeCustomerId) {
+      response.status(400).send('No Stripe customer is linked to this account.');
       return;
     }
 
     const portalSession = await stripe!.billingPortal.sessions.create({
-      customer: customerId,
+      customer: subscription.stripeCustomerId,
       return_url: returnUrl || frontendUrl,
     });
 

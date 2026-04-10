@@ -4,6 +4,7 @@ node_modules/
 dist/
 server/node_modules/
 server/data/
+server/data/store.json
 src/app/App.new.tsx
 src/app/App.copy.tsx
 /App.tsx

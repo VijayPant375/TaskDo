@@ -94,7 +94,7 @@ export function SuccessScreen({ onContinue, sessionId }: SuccessScreenProps) {
         </div>
         <h1 className="text-3xl font-bold">Premium is active</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Your Stripe subscription is live and TaskDo now allows unlimited active tasks on this device.
+          Your Stripe subscription is live and TaskDo now allows unlimited active tasks on your account.
         </p>
         <Button
           className="mt-6 w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
