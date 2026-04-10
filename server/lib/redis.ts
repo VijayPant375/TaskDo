@@ -1,8 +1,10 @@
 import { Redis } from 'ioredis';
+import type { StoredSession } from './store.js';
 
 let sharedRedisClient: Redis | null = null;
 let hasLoggedMissingRedisUrl = false;
 let redisAvailable = false;
+const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
 
 function getRedisUrl() {
   const value = process.env.REDIS_URL?.trim();
@@ -74,6 +76,75 @@ export async function isRedisAvailable() {
   }
 
   return redisAvailable;
+}
+
+function getSessionKey(sessionId: string) {
+  return `session:${sessionId}`;
+}
+
+export async function setSession(session: StoredSession) {
+  const client = getRedisClient();
+  if (!client) {
+    return false;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return false;
+    }
+
+    await client.set(
+      getSessionKey(session.id),
+      JSON.stringify(session),
+      'EX',
+      refreshTokenLifetimeSeconds
+    );
+    return true;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn('Failed to write session to Redis. Falling back to file-backed storage.', error);
+    return false;
+  }
+}
+
+export async function getSession(sessionId: string) {
+  const client = getRedisClient();
+  if (!client) {
+    return null;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return null;
+    }
+
+    const raw = await client.get(getSessionKey(sessionId));
+    return raw ? (JSON.parse(raw) as StoredSession) : null;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn('Failed to read session from Redis. Falling back to file-backed storage.', error);
+    return null;
+  }
+}
+
+export async function deleteSession(sessionId: string) {
+  const client = getRedisClient();
+  if (!client) {
+    return false;
+  }
+
+  try {
+    if (!(await isRedisAvailable())) {
+      return false;
+    }
+
+    await client.del(getSessionKey(sessionId));
+    return true;
+  } catch (error) {
+    redisAvailable = false;
+    console.warn('Failed to delete session from Redis. Falling back to file-backed storage.', error);
+    return false;
+  }
 }
 
 export const redis = {

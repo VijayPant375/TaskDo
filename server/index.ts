@@ -28,7 +28,6 @@ import {
   importTasksForUser,
   listTasksByUser,
   pruneExpiredOAuthStates,
-  pruneExpiredSessions,
   saveOAuthState,
   updateSessionRefreshToken,
   updateTaskForUser,
@@ -103,13 +102,13 @@ function createRefreshToken(userId: string, sessionId: string) {
   )}`;
 }
 
-function setSessionCookies(response: Response, userId: string, sessionId: string) {
+async function setSessionCookies(response: Response, userId: string, sessionId: string) {
   const accessToken = createAccessToken(userId);
   const refreshToken = createRefreshToken(userId, sessionId);
   const refreshTokenHash = hashToken(refreshToken, jwtRefreshSecret);
   const refreshExpiresAt = new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString();
 
-  updateSessionRefreshToken(sessionId, refreshTokenHash, refreshExpiresAt);
+  await updateSessionRefreshToken(sessionId, refreshTokenHash, refreshExpiresAt);
   setAuthCookies(response, {
     accessToken,
     accessTokenMaxAgeSeconds: accessTokenLifetimeSeconds,
@@ -389,7 +388,6 @@ app.use('/api/', apiLimiter);
 
 app.use((_request, _response, next) => {
   pruneExpiredOAuthStates();
-  pruneExpiredSessions();
   next();
 });
 
@@ -487,13 +485,13 @@ app.get('/api/auth/google/callback', async (request, response) => {
       providerAccountId: profile.sub,
     });
 
-    const session = createSession({
+    const session = await createSession({
       expiresAt: new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString(),
       refreshTokenHash: 'pending',
       userId: user.id,
     });
 
-    setSessionCookies(response, user.id, session.id);
+    await setSessionCookies(response, user.id, session.id);
     response.redirect(new URL(oauthState.returnTo, frontendUrl).toString());
   } catch (error) {
     console.error('Google OAuth callback failed.', error);
@@ -501,7 +499,7 @@ app.get('/api/auth/google/callback', async (request, response) => {
   }
 });
 
-app.post('/api/auth/refresh', (request, response) => {
+app.post('/api/auth/refresh', async (request, response) => {
   const cookies = parseCookies(request.headers.cookie);
   const refreshToken = cookies[refreshCookieName];
 
@@ -530,7 +528,7 @@ app.post('/api/auth/refresh', (request, response) => {
     return;
   }
 
-  const session = getSessionById(payload.sid);
+  const session = await getSessionById(payload.sid);
   const user = getUserById(payload.sub);
   const expectedHash = hashToken(refreshToken, jwtRefreshSecret);
 
@@ -542,7 +540,7 @@ app.post('/api/auth/refresh', (request, response) => {
     new Date(session.expiresAt).getTime() <= Date.now()
   ) {
     if (session) {
-      deleteSession(session.id);
+      await deleteSession(session.id);
     }
 
     clearAuthCookies(response, secureCookies);
@@ -550,11 +548,11 @@ app.post('/api/auth/refresh', (request, response) => {
     return;
   }
 
-  setSessionCookies(response, user.id, session.id);
+  await setSessionCookies(response, user.id, session.id);
   response.json({ ok: true });
 });
 
-app.post('/api/auth/logout', (request, response) => {
+app.post('/api/auth/logout', async (request, response) => {
   const cookies = parseCookies(request.headers.cookie);
   const refreshToken = cookies[refreshCookieName];
 
@@ -564,7 +562,7 @@ app.post('/api/auth/logout', (request, response) => {
     const payload = jwtPart ? verifyJwt(jwtPart, jwtRefreshSecret) : null;
 
     if (payload && typeof payload.sid === 'string') {
-      deleteSession(payload.sid);
+      await deleteSession(payload.sid);
     }
   }
 

@@ -2,6 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import {
+  deleteSession as deleteRedisSession,
+  getSession as getRedisSession,
+  isRedisAvailable,
+  setSession as setRedisSession,
+} from './redis.js';
 
 export interface StoredTask {
   id: string;
@@ -193,14 +199,14 @@ export function pruneExpiredOAuthStates() {
   });
 }
 
-export function createSession(input: {
+export async function createSession(input: {
   expiresAt: string;
   refreshTokenHash: string;
   userId: string;
 }) {
-  return mutateDatabase((database) => {
+  const session = mutateDatabase((database) => {
     const now = new Date().toISOString();
-    const session: StoredSession = {
+    const createdSession: StoredSession = {
       id: randomUUID(),
       createdAt: now,
       expiresAt: input.expiresAt,
@@ -209,41 +215,85 @@ export function createSession(input: {
       userId: input.userId,
     };
 
-    database.sessions.push(session);
-    return session;
+    database.sessions.push(createdSession);
+    return createdSession;
   });
+
+  await setRedisSession(session);
+  return session;
 }
 
-export function getSessionById(sessionId: string) {
+function getSessionByIdFromFile(sessionId: string) {
   return readDatabase().sessions.find((session) => session.id === sessionId) ?? null;
 }
 
-export function updateSessionRefreshToken(sessionId: string, refreshTokenHash: string, expiresAt: string) {
-  mutateDatabase((database) => {
+export async function getSessionById(sessionId: string) {
+  const redisSession = await getRedisSession(sessionId);
+  if (redisSession) {
+    return redisSession;
+  }
+
+  return getSessionByIdFromFile(sessionId);
+}
+
+export async function updateSessionRefreshToken(
+  sessionId: string,
+  refreshTokenHash: string,
+  expiresAt: string
+) {
+  const session = mutateDatabase((database) => {
     const session = database.sessions.find((item) => item.id === sessionId);
     if (!session) {
-      return;
+      return null;
     }
 
     session.refreshTokenHash = refreshTokenHash;
     session.expiresAt = expiresAt;
     session.lastUsedAt = new Date().toISOString();
+    return session;
   });
+
+  if (session) {
+    await setRedisSession(session);
+  }
 }
 
-export function deleteSession(sessionId: string) {
+export async function deleteSession(sessionId: string) {
   mutateDatabase((database) => {
     database.sessions = database.sessions.filter((session) => session.id !== sessionId);
   });
+
+  await deleteRedisSession(sessionId);
 }
 
-export function pruneExpiredSessions() {
+export async function pruneExpiredSessions() {
   const now = Date.now();
-  mutateDatabase((database) => {
-    database.sessions = database.sessions.filter(
-      (session) => new Date(session.expiresAt).getTime() > now
-    );
-  });
+  const redisIsAvailable = await isRedisAvailable();
+  const database = readDatabase();
+
+  if (!redisIsAvailable) {
+    database.sessions = database.sessions.filter((session) => new Date(session.expiresAt).getTime() > now);
+    writeDatabase(database);
+    return;
+  }
+
+  const nextSessions: StoredSession[] = [];
+
+  for (const session of database.sessions) {
+    const isExpired = new Date(session.expiresAt).getTime() <= now;
+    if (!isExpired) {
+      nextSessions.push(session);
+      continue;
+    }
+
+    const redisSession = await getRedisSession(session.id);
+    if (redisSession) {
+      nextSessions.push(session);
+    }
+  }
+
+  database.sessions = nextSessions;
+  writeDatabase(database);
 }
 
 export function listTasksByUser(userId: string) {
