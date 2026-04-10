@@ -277,15 +277,15 @@ function mutateDatabase<T>(mutator: (database: IndexedDatabase) => T): T {
 }
 
 export function getUserById(userId: string) {
-  return readDatabase().users.find((user) => user.id === userId) ?? null;
+  return readDatabase().userById.get(userId) ?? null;
 }
 
 export function getUserByProviderAccountId(providerAccountId: string) {
-  return readDatabase().users.find((user) => user.providerAccountId === providerAccountId) ?? null;
+  return readDatabase().userByProviderAccountId.get(providerAccountId) ?? null;
 }
 
 export function getUserByEmail(email: string) {
-  return readDatabase().users.find((user) => user.email.toLowerCase() === email.toLowerCase()) ?? null;
+  return readDatabase().userByEmail.get(email.toLowerCase()) ?? null;
 }
 
 export function upsertGoogleUser(input: {
@@ -297,8 +297,9 @@ export function upsertGoogleUser(input: {
   return mutateDatabase((database) => {
     const now = new Date().toISOString();
     const existing =
-      database.users.find((user) => user.providerAccountId === input.providerAccountId) ??
-      database.users.find((user) => user.email.toLowerCase() === input.email.toLowerCase());
+      database.userByProviderAccountId.get(input.providerAccountId) ??
+      database.userByEmail.get(input.email.toLowerCase()) ??
+      null;
 
     if (existing) {
       existing.avatarUrl = input.avatarUrl;
@@ -479,13 +480,12 @@ export async function pruneExpiredSessions() {
 }
 
 export function listTasksByUser(userId: string) {
-  return readDatabase()
-    .tasks.filter((task) => task.userId === userId)
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const tasks = readDatabase().tasksByUserId.get(userId) ?? [];
+  return [...tasks].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 }
 
 export function countActiveTasksByUser(userId: string) {
-  return readDatabase().tasks.filter((task) => task.userId === userId && !task.completed).length;
+  return (readDatabase().tasksByUserId.get(userId) ?? []).filter((task) => !task.completed).length;
 }
 
 export function createTaskForUser(
@@ -514,7 +514,8 @@ export function updateTaskForUser(
   input: Partial<Omit<StoredTask, 'createdAt' | 'id' | 'updatedAt' | 'userId'>>
 ) {
   return mutateDatabase((database) => {
-    const task = database.tasks.find((item) => item.id === taskId && item.userId === userId) ?? null;
+    const task =
+      (database.tasksByUserId.get(userId) ?? []).find((item) => item.id === taskId) ?? null;
     if (!task) {
       return null;
     }
@@ -527,7 +528,7 @@ export function updateTaskForUser(
 
 export function deleteTaskForUser(userId: string, taskId: string) {
   return mutateDatabase((database) => {
-    const deletedTask = database.tasks.find((task) => task.id === taskId && task.userId === userId) ?? null;
+    const deletedTask = (database.tasksByUserId.get(userId) ?? []).find((task) => task.id === taskId) ?? null;
     const beforeCount = database.tasks.length;
     database.tasks = database.tasks.filter((task) => !(task.id === taskId && task.userId === userId));
 
@@ -546,9 +547,9 @@ export function importTasksForUser(
   return mutateDatabase((database) => {
     const now = new Date().toISOString();
     const existingSignatures = new Set(
-      database.tasks
-        .filter((task) => task.userId === userId)
-        .map((task) => `${task.name}::${task.deadline}::${task.alarmTime}`)
+      (database.tasksByUserId.get(userId) ?? []).map(
+        (task) => `${task.name}::${task.deadline}::${task.alarmTime}`
+      )
     );
 
     const created: StoredTask[] = [];
@@ -581,22 +582,15 @@ export function importTasksForUser(
 }
 
 export function getSubscriptionByUserId(userId: string) {
-  return readDatabase().subscriptions.find((subscription) => subscription.userId === userId) ?? null;
+  return readDatabase().subscriptionByUserId.get(userId) ?? null;
 }
 
 export function getSubscriptionByStripeCustomerId(customerId: string) {
-  return (
-    readDatabase().subscriptions.find((subscription) => subscription.stripeCustomerId === customerId) ??
-    null
-  );
+  return readDatabase().subscriptionByStripeCustomerId.get(customerId) ?? null;
 }
 
 export function getSubscriptionByStripeSubscriptionId(subscriptionId: string) {
-  return (
-    readDatabase().subscriptions.find(
-      (subscription) => subscription.stripeSubscriptionId === subscriptionId
-    ) ?? null
-  );
+  return readDatabase().subscriptionByStripeSubscriptionId.get(subscriptionId) ?? null;
 }
 
 export function upsertSubscriptionForUser(
@@ -605,8 +599,7 @@ export function upsertSubscriptionForUser(
 ) {
   return mutateDatabase((database) => {
     const now = new Date().toISOString();
-    const existing =
-      database.subscriptions.find((subscription) => subscription.userId === userId) ?? null;
+    const existing = database.subscriptionByUserId.get(userId) ?? null;
 
     if (existing) {
       existing.tier = input.tier;
