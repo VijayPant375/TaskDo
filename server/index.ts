@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import cors from 'cors';
@@ -6,6 +7,7 @@ import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
+import { connectDB } from './lib/db.js';
 import {
   accessCookieName,
   clearAuthCookies,
@@ -48,7 +50,15 @@ import {
   verifyJwt,
 } from './lib/tokens.js';
 
-dotenv.config();
+const currentFilePath = fileURLToPath(import.meta.url);
+const serverDirectory = path.dirname(currentFilePath);
+const envFileCandidates = [
+  path.resolve(serverDirectory, '.env'),
+  path.resolve(serverDirectory, '..', '.env'),
+];
+const envFilePath = envFileCandidates.find((candidate) => fs.existsSync(candidate));
+
+dotenv.config(envFilePath ? { path: envFilePath } : undefined);
 
 const configuredRedisUrl = process.env.REDIS_URL?.trim();
 
@@ -74,8 +84,6 @@ const accessTokenLifetimeSeconds = 60 * 15;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
-const currentFilePath = fileURLToPath(import.meta.url);
-const serverDirectory = path.dirname(currentFilePath);
 const frontendDistDirectory = path.resolve(serverDirectory, '..', '..', 'dist');
 const freeTaskLimit = 50;
 
@@ -914,6 +922,15 @@ app.get('*', (request, response, next) => {
   response.sendFile(path.join(frontendDistDirectory, 'index.html'));
 });
 
-app.listen(port, host, () => {
-  console.log(`TaskDo server listening on http://${host}:${port}`);
+async function startServer() {
+  await connectDB();
+
+  app.listen(port, host, () => {
+    console.log(`TaskDo server listening on http://${host}:${port}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error('Failed to start TaskDo server.', error);
+  process.exit(1);
 });
