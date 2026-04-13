@@ -526,7 +526,7 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light">
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <SubscriptionProvider>
         <AppContent />
       </SubscriptionProvider>

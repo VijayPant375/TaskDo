@@ -29,7 +29,9 @@ services:
     container_name: taskdo-backend
     restart: unless-stopped
     ports: ["3001:3001"]
-    env_file: [.env]
+    env_file:
+      - ./server/.env
+      - ./.env
     depends_on:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
