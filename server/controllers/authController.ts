@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { upsertLocalUser } from '../lib/store.js';
 import { User } from '../models/User.js';
 
 function getJwtSecret() {
@@ -47,13 +48,19 @@ export async function signup(request: Request, response: Response) {
       username,
     });
 
-    const token = createAuthToken(user._id.toString());
+    const authUser = upsertLocalUser({
+      email: user.email,
+      id: user._id.toString(),
+      name: user.username,
+    });
+
+    const token = createAuthToken(authUser.id);
 
     response.json({
       token,
       user: {
         email: user.email,
-        id: user._id.toString(),
+        id: authUser.id,
         username: user.username,
       },
     });
@@ -79,13 +86,19 @@ export async function login(request: Request, response: Response) {
       return;
     }
 
-    const token = createAuthToken(user._id.toString());
+    const authUser = upsertLocalUser({
+      email: user.email,
+      id: user._id.toString(),
+      name: user.username,
+    });
+
+    const token = createAuthToken(authUser.id);
 
     response.json({
       token,
       user: {
         email: user.email,
-        id: user._id.toString(),
+        id: authUser.id,
         username: user.username,
       },
     });

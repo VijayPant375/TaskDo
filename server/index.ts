@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
 import { createAuthToken } from './controllers/authController.js';
 import { connectDB } from './lib/db.js';
+import { getBearerUserId } from './middleware/auth.js';
 import { User } from './models/User.js';
 import authRoutes from './routes/auth.js';
 import {
@@ -41,6 +42,7 @@ import {
   saveOAuthState,
   updateSessionRefreshToken,
   updateTaskForUser,
+  upsertLocalUser,
   upsertGoogleUser,
   upsertSubscriptionForUser,
 } from './lib/store.js';
@@ -187,6 +189,12 @@ async function setSessionCookies(response: Response, userId: string, sessionId: 
 }
 
 function getAuthenticatedUserFromRequest(request: Request) {
+  const bearerUserId = getBearerUserId(request);
+
+  if (bearerUserId) {
+    return getUserById(bearerUserId);
+  }
+
   const cookies = parseCookies(request.headers.cookie);
   const token = cookies[accessCookieName];
 
@@ -620,7 +628,13 @@ app.get('/api/auth/google/callback', async (request, response) => {
       await mongoUser.save();
     }
 
-    const token = createAuthToken(mongoUser._id.toString());
+    const localUser = upsertLocalUser({
+      email: mongoUser.email,
+      id: mongoUser._id.toString(),
+      name: mongoUser.username,
+    });
+
+    const token = createAuthToken(localUser.id);
 
     const session = await createSession({
       expiresAt: new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString(),

@@ -30,7 +30,7 @@ export interface StoredUser {
   email: string;
   name: string;
   avatarUrl: string | null;
-  provider: 'google';
+  provider: 'google' | 'local';
   providerAccountId: string;
   createdAt: string;
   updatedAt: string;
@@ -345,6 +345,44 @@ export function upsertGoogleUser(input: {
       name: input.name,
       provider: 'google',
       providerAccountId: input.providerAccountId,
+      updatedAt: now,
+    };
+
+    database.users.push(created);
+    updateIndexesOnWrite(database, 'user', created);
+    return created;
+  });
+}
+
+export function upsertLocalUser(input: {
+  email: string;
+  id: string;
+  name: string;
+}) {
+  return mutateDatabase((database) => {
+    const now = new Date().toISOString();
+    const existing =
+      database.userById.get(input.id) ?? database.userByEmail.get(input.email.toLowerCase()) ?? null;
+
+    if (existing) {
+      existing.avatarUrl = existing.avatarUrl ?? null;
+      existing.email = input.email;
+      existing.name = input.name;
+      existing.provider = existing.provider ?? 'local';
+      existing.providerAccountId = existing.providerAccountId || input.id;
+      existing.updatedAt = now;
+      updateIndexesOnWrite(database, 'user', existing);
+      return existing;
+    }
+
+    const created: StoredUser = {
+      id: input.id,
+      avatarUrl: null,
+      createdAt: now,
+      email: input.email,
+      name: input.name,
+      provider: 'local',
+      providerAccountId: input.id,
       updatedAt: now,
     };
 
