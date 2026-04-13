@@ -17,6 +17,10 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
+export function createAuthToken(userId: string) {
+  return jwt.sign({ id: userId }, getJwtSecret());
+}
+
 export async function signup(request: Request, response: Response) {
   try {
     const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : '';
@@ -43,7 +47,7 @@ export async function signup(request: Request, response: Response) {
       username,
     });
 
-    const token = jwt.sign({ id: user._id.toString() }, getJwtSecret());
+    const token = createAuthToken(user._id.toString());
 
     response.json({
       token,
@@ -75,7 +79,7 @@ export async function login(request: Request, response: Response) {
       return;
     }
 
-    const token = jwt.sign({ id: user._id.toString() }, getJwtSecret());
+    const token = createAuthToken(user._id.toString());
 
     response.json({
       token,

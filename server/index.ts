@@ -7,7 +7,9 @@ import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
+import { createAuthToken } from './controllers/authController.js';
 import { connectDB } from './lib/db.js';
+import { User } from './models/User.js';
 import authRoutes from './routes/auth.js';
 import {
   accessCookieName,
@@ -398,6 +400,23 @@ async function exchangeGoogleCodeForProfile(code: string, codeVerifier: string) 
   };
 }
 
+async function generateUniqueGoogleUsername(email: string) {
+  const baseUsername = email.split('@')[0]?.trim() || 'taskdo';
+  const sanitizedBaseUsername = baseUsername.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'taskdo';
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const suffix = Math.random().toString(36).slice(2, 6);
+    const candidate = `${sanitizedBaseUsername}${suffix}`;
+    const existingUser = await User.exists({ username: candidate });
+
+    if (!existingUser) {
+      return candidate;
+    }
+  }
+
+  return `${sanitizedBaseUsername}${Date.now().toString(36)}`;
+}
+
 function requireStripe(response: Response) {
   if (!stripe) {
     response.status(503).send('Stripe is not configured yet.');
@@ -581,21 +600,39 @@ app.get('/api/auth/google/callback', async (request, response) => {
       return;
     }
 
-    const user = upsertGoogleUser({
+    const sessionUser = upsertGoogleUser({
       avatarUrl: profile.picture ?? null,
       email: profile.email,
       name: profile.name,
       providerAccountId: profile.sub,
     });
 
+    let mongoUser = await User.findOne({ email: profile.email.toLowerCase() });
+
+    if (!mongoUser) {
+      mongoUser = await User.create({
+        email: profile.email.toLowerCase(),
+        googleId: profile.sub,
+        username: await generateUniqueGoogleUsername(profile.email),
+      });
+    } else if (mongoUser.googleId !== profile.sub) {
+      mongoUser.googleId = profile.sub;
+      await mongoUser.save();
+    }
+
+    const token = createAuthToken(mongoUser._id.toString());
+
     const session = await createSession({
       expiresAt: new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString(),
       refreshTokenHash: 'pending',
-      userId: user.id,
+      userId: sessionUser.id,
     });
 
-    await setSessionCookies(response, user.id, session.id);
-    response.redirect(new URL(oauthState.returnTo, frontendUrl).toString());
+    await setSessionCookies(response, sessionUser.id, session.id);
+
+    const redirectUrl = new URL(oauthState.returnTo, frontendUrl);
+    redirectUrl.searchParams.set('token', token);
+    response.redirect(redirectUrl.toString());
   } catch (error) {
     console.error('Google OAuth callback failed.', error);
     response.status(500).send('Unable to complete Google sign-in.');
