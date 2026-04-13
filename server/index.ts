@@ -79,6 +79,50 @@ const serverDirectory = path.dirname(currentFilePath);
 const frontendDistDirectory = path.resolve(serverDirectory, '..', '..', 'dist');
 const freeTaskLimit = 50;
 
+function getAllowedFrontendOrigins() {
+  const configuredOrigin = new URL(frontendUrl).origin;
+  const allowedOrigins = new Set([configuredOrigin]);
+  const configuredUrl = new URL(configuredOrigin);
+
+  if (configuredUrl.hostname === 'localhost') {
+    allowedOrigins.add(
+      `${configuredUrl.protocol}//127.0.0.1${configuredUrl.port ? `:${configuredUrl.port}` : ''}`
+    );
+  }
+
+  if (configuredUrl.hostname === '127.0.0.1') {
+    allowedOrigins.add(
+      `${configuredUrl.protocol}//localhost${configuredUrl.port ? `:${configuredUrl.port}` : ''}`
+    );
+  }
+
+  return allowedOrigins;
+}
+
+const allowedFrontendOrigins = getAllowedFrontendOrigins();
+
+function resolveSafeReturnTo(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return '/';
+  }
+
+  if (value.startsWith('/')) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (allowedFrontendOrigins.has(url.origin)) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    return '/';
+  }
+
+  return '/';
+}
+
 interface AuthenticatedRequest extends Request {
   authUser?: {
     id: string;
@@ -423,7 +467,14 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (reque
 app.use(
   cors({
     credentials: true,
-    origin: frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin || allowedFrontendOrigins.has(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin} is not allowed by CORS.`));
+    },
   })
 );
 app.use(express.json());
@@ -464,10 +515,7 @@ app.get('/api/auth/google/start', async (request, response) => {
   const state = randomUUID();
   const codeVerifier = createCodeVerifier();
   const codeChallenge = createCodeChallenge(codeVerifier);
-  const returnTo =
-    typeof request.query.returnTo === 'string' && request.query.returnTo.startsWith('/')
-      ? request.query.returnTo
-      : '/';
+  const returnTo = resolveSafeReturnTo(request.query.returnTo);
 
   try {
     await saveOAuthState({

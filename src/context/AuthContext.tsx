@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       refreshSession,
       signInWithGoogle: () => {
-        startGoogleSignIn(window.location.pathname);
+        startGoogleSignIn(window.location.href);
       },
       signOut: async () => {
         await logoutRequest();

@@ -80,26 +80,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     void loadSubscriptionFromServer();
   }, [isAuthenticated, isAuthLoading]);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
-
-    const refreshOnFocus = () => {
-      if (!document.hidden) {
-        void loadSubscriptionFromServer('refresh');
-      }
-    };
-
-    window.addEventListener('focus', refreshOnFocus);
-    document.addEventListener('visibilitychange', refreshOnFocus);
-
-    return () => {
-      window.removeEventListener('focus', refreshOnFocus);
-      document.removeEventListener('visibilitychange', refreshOnFocus);
-    };
-  }, [isAuthenticated]);
-
   const value = useMemo<SubscriptionContextValue>(() => {
     const isPremium = subscriptionStatus.tier === 'premium';
 
