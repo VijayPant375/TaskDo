@@ -3,10 +3,26 @@ export interface AuthUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  username?: string;
 }
 
 export interface AuthSessionResponse {
   googleOAuthEnabled: boolean;
   isAuthenticated: boolean;
   user: AuthUser | null;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    username: string;
+  };
+}
+
+export interface AuthSubmission {
+  email: string;
+  username: string;
+  password: string;
 }

@@ -24,7 +24,9 @@ function AppContent() {
     googleOAuthEnabled,
     isAuthenticated,
     isLoading: isAuthLoading,
+    loginWithPassword,
     signInWithGoogle,
+    signUpWithPassword,
     signOut,
     user,
   } = useAuth();
@@ -165,7 +167,9 @@ function AppContent() {
       <AuthLandingScreen
         googleOAuthEnabled={googleOAuthEnabled}
         isLoading={isAuthLoading}
+        onLogin={loginWithPassword}
         onContinueWithGoogle={signInWithGoogle}
+        onSignUp={signUpWithPassword}
       />
     );
   }

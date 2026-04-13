@@ -1,10 +1,15 @@
-import { CheckCircle2, Cloud, ShieldCheck, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, Cloud, LoaderCircle, ShieldCheck, Sparkles, XCircle } from 'lucide-react';
+import { checkUsername } from '../../api/auth';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 
 interface AuthLandingScreenProps {
   googleOAuthEnabled: boolean;
   isLoading: boolean;
+  onLogin: (credentials: { email: string; password: string }) => Promise<void>;
   onContinueWithGoogle: () => void;
+  onSignUp: (credentials: { email: string; username: string; password: string }) => Promise<void>;
 }
 
 const featureList = [
@@ -16,8 +21,85 @@ const featureList = [
 export function AuthLandingScreen({
   googleOAuthEnabled,
   isLoading,
+  onLogin,
   onContinueWithGoogle,
+  onSignUp,
 }: AuthLandingScreenProps) {
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [usernameState, setUsernameState] = useState<
+    'idle' | 'checking' | 'available' | 'taken' | 'invalid'
+  >('idle');
+
+  useEffect(() => {
+    if (mode !== 'signup') {
+      setUsernameState('idle');
+      return;
+    }
+
+    const trimmedUsername = username.trim();
+
+    if (!trimmedUsername) {
+      setUsernameState('idle');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(trimmedUsername)) {
+      setUsernameState('invalid');
+      return;
+    }
+
+    setUsernameState('checking');
+    const timeoutId = window.setTimeout(() => {
+      void checkUsername(trimmedUsername)
+        .then((available) => {
+          setUsernameState(available ? 'available' : 'taken');
+        })
+        .catch(() => {
+          setUsernameState('idle');
+        });
+    }, 500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [mode, username]);
+
+  const handleSubmit = async () => {
+    setError('');
+    setIsSubmitting(true);
+
+    try {
+      if (mode === 'login') {
+        await onLogin({ email, password });
+        return;
+      }
+
+      if (usernameState === 'taken' || usernameState === 'invalid' || usernameState === 'checking') {
+        throw new Error('Choose an available username before signing up.');
+      }
+
+      await onSignUp({ email, password, username });
+    } catch (submissionError) {
+      setError(submissionError instanceof Error ? submissionError.message : 'Unable to continue.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const usernameIndicator =
+    mode === 'signup' && usernameState !== 'idle' ? (
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+        {usernameState === 'checking' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+        {usernameState === 'available' ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : null}
+        {usernameState === 'taken' || usernameState === 'invalid' ? (
+          <XCircle className="h-4 w-4 text-rose-500" />
+        ) : null}
+      </div>
+    ) : null;
+
   return (
     <div className="screen-transition relative min-h-screen overflow-hidden px-4 py-5 sm:px-6 lg:px-8">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.22),_transparent_28%),radial-gradient(circle_at_80%_20%,_rgba(14,165,233,0.18),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.18),_transparent_26%)]" />
@@ -67,16 +149,110 @@ export function AuthLandingScreen({
 
             <div className="space-y-3">
               <h3 className="text-2xl font-semibold tracking-[-0.03em] sm:text-3xl">
-                Sign in to your workspace
+                Welcome to TaskDo
               </h3>
               <p className="text-sm leading-7 text-muted-foreground">
-                Google sign-in creates your account automatically and unlocks your synced task space.
+                Sign in with your account details or Google and keep your work flowing across devices.
               </p>
             </div>
 
+            <div className="mt-8 inline-flex w-full rounded-2xl border border-border/70 bg-muted/60 p-1">
+              <button
+                type="button"
+                className={`flex-1 rounded-[1rem] px-4 py-2.5 text-sm font-medium transition ${
+                  mode === 'login' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                }`}
+                onClick={() => {
+                  setMode('login');
+                  setError('');
+                }}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-[1rem] px-4 py-2.5 text-sm font-medium transition ${
+                  mode === 'signup' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                }`}
+                onClick={() => {
+                  setMode('signup');
+                  setError('');
+                }}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {mode === 'signup' ? (
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">Username</label>
+                  <div className="relative">
+                    <Input
+                      className="h-12 rounded-2xl pr-10"
+                      onChange={(event) => setUsername(event.target.value)}
+                      placeholder="Pick a username"
+                      value={username}
+                    />
+                    {usernameIndicator}
+                  </div>
+                  {usernameState === 'invalid' ? (
+                    <p className="mt-2 text-xs text-rose-500">
+                      Use 3-20 letters, numbers, or underscores.
+                    </p>
+                  ) : null}
+                  {usernameState === 'taken' ? (
+                    <p className="mt-2 text-xs text-rose-500">That username is already taken.</p>
+                  ) : null}
+                  {usernameState === 'available' ? (
+                    <p className="mt-2 text-xs text-emerald-600">Username is available.</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">Email</label>
+                <Input
+                  className="h-12 rounded-2xl"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  type="email"
+                  value={email}
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">Password</label>
+                <Input
+                  className="h-12 rounded-2xl"
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={mode === 'login' ? 'Enter your password' : 'Create a password'}
+                  type="password"
+                  value={password}
+                />
+              </div>
+
+              <Button
+                className="h-12 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-base text-white hover:from-amber-600 hover:to-orange-600"
+                disabled={isSubmitting || isLoading}
+                onClick={() => void handleSubmit()}
+              >
+                {isSubmitting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {mode === 'login' ? 'Login' : 'Sign Up'}
+              </Button>
+
+              {error ? <p className="text-sm text-rose-500">{error}</p> : null}
+            </div>
+
+            <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.24em] text-muted-foreground">
+              <div className="h-px flex-1 bg-border/80" />
+              <span>or</span>
+              <div className="h-px flex-1 bg-border/80" />
+            </div>
+
             <Button
-              className="mt-8 h-12 w-full rounded-2xl bg-[#111827] text-base text-white hover:bg-[#0f172a]"
-              disabled={!googleOAuthEnabled || isLoading}
+              className="mt-6 h-12 w-full rounded-2xl bg-[#111827] text-base text-white hover:bg-[#0f172a]"
+              disabled={!googleOAuthEnabled || isLoading || isSubmitting}
               onClick={onContinueWithGoogle}
             >
               <svg aria-hidden="true" className="mr-3 h-5 w-5" viewBox="0 0 24 24">

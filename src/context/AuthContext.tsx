@@ -1,13 +1,63 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { login as loginRequest, signup as signupRequest } from '../api/auth';
 import { fetchAuthSession, logout as logoutRequest, startGoogleSignIn } from '../services/auth';
-import type { AuthUser } from '../types/auth';
+import type { AuthResponse, AuthSubmission, AuthUser } from '../types/auth';
+
+const authTokenStorageKey = 'taskdo.token';
+const authUserStorageKey = 'taskdo.user';
+
+function mapAuthResponseUser(payload: AuthResponse['user']): AuthUser {
+  return {
+    avatarUrl: null,
+    email: payload.email,
+    id: payload.id,
+    name: payload.username,
+    username: payload.username,
+  };
+}
+
+function readStoredUser() {
+  const raw = localStorage.getItem(authUserStorageKey);
+
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    localStorage.removeItem(authUserStorageKey);
+    return null;
+  }
+}
+
+function storeAuthenticatedUser(token: string, user: AuthUser) {
+  localStorage.setItem(authTokenStorageKey, token);
+  localStorage.setItem(authUserStorageKey, JSON.stringify(user));
+}
+
+function clearStoredAuthentication() {
+  localStorage.removeItem(authTokenStorageKey);
+  localStorage.removeItem(authUserStorageKey);
+}
+
+function redirectToApp() {
+  if (window.location.pathname !== '/app') {
+    window.location.assign('/app');
+    return;
+  }
+
+  window.history.replaceState({}, '', '/app');
+}
 
 interface AuthContextValue {
   googleOAuthEnabled: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
+  loginWithPassword: (credentials: Pick<AuthSubmission, 'email' | 'password'>) => Promise<void>;
   refreshSession: () => Promise<void>;
   signInWithGoogle: () => void;
+  signUpWithPassword: (credentials: AuthSubmission) => Promise<void>;
   signOut: () => Promise<void>;
   user: AuthUser | null;
 }
@@ -23,12 +73,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
+      const url = new URL(window.location.href);
+      const tokenFromRedirect = url.searchParams.get('token');
       const session = await fetchAuthSession();
-      setUser(session.user);
       setGoogleOAuthEnabled(session.googleOAuthEnabled);
+
+      if (session.user) {
+        setUser(session.user);
+
+        if (tokenFromRedirect) {
+          storeAuthenticatedUser(tokenFromRedirect, session.user);
+          url.searchParams.delete('token');
+          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+        }
+
+        return;
+      }
+
+      if (tokenFromRedirect) {
+        localStorage.setItem(authTokenStorageKey, tokenFromRedirect);
+        url.searchParams.delete('token');
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+      }
+
+      const storedToken = localStorage.getItem(authTokenStorageKey);
+      const storedUser = readStoredUser();
+      setUser(storedToken && storedUser ? storedUser : null);
     } catch (error) {
       console.error('Failed to load auth session.', error);
-      setUser(null);
+      const storedToken = localStorage.getItem(authTokenStorageKey);
+      const storedUser = readStoredUser();
+      setUser(storedToken && storedUser ? storedUser : null);
     } finally {
       setIsLoading(false);
     }
@@ -43,11 +118,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       googleOAuthEnabled,
       isAuthenticated: Boolean(user),
       isLoading,
+      loginWithPassword: async (credentials) => {
+        const response = await loginRequest(credentials);
+        const nextUser = mapAuthResponseUser(response.user);
+        storeAuthenticatedUser(response.token, nextUser);
+        setUser(nextUser);
+        redirectToApp();
+      },
       refreshSession,
       signInWithGoogle: () => {
-        startGoogleSignIn(window.location.href);
+        startGoogleSignIn('/app');
+      },
+      signUpWithPassword: async (credentials) => {
+        const response = await signupRequest(credentials);
+        const nextUser = mapAuthResponseUser(response.user);
+        storeAuthenticatedUser(response.token, nextUser);
+        setUser(nextUser);
+        redirectToApp();
       },
       signOut: async () => {
+        clearStoredAuthentication();
         await logoutRequest();
         setUser(null);
       },
