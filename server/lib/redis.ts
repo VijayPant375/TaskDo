@@ -2,7 +2,6 @@ import { Redis } from 'ioredis';
 import type { StoredOAuthState, StoredSession } from './store.js';
 
 let sharedRedisClient: Redis | null = null;
-let hasLoggedMissingRedisUrl = false;
 let redisAvailable = false;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
 const oauthStateLifetimeSeconds = 60 * 10;
@@ -25,11 +24,6 @@ function getRedisUrl() {
 function createRedisClient() {
   const redisUrl = getRedisUrl();
   if (!redisUrl) {
-    if (!hasLoggedMissingRedisUrl) {
-      console.warn('REDIS_URL is not configured. Redis features are disabled.');
-      hasLoggedMissingRedisUrl = true;
-    }
-
     redisAvailable = false;
     return null;
   }

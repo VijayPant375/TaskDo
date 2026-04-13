@@ -50,6 +50,14 @@ import {
 
 dotenv.config();
 
+const configuredRedisUrl = process.env.REDIS_URL?.trim();
+
+if (!configuredRedisUrl) {
+  console.warn(
+    'REDIS_URL is not set. Redis features are disabled and the server will fall back to file-only mode.'
+  );
+}
+
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? '0.0.0.0';

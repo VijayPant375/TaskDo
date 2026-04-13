@@ -151,16 +151,23 @@ export function buildIndexes(database: DatabaseShape): IndexedDatabase {
   return indexedDatabase;
 }
 
-function refreshUserIndexes(database: IndexedDatabase) {
-  database.userById.clear();
-  database.userByEmail.clear();
-  database.userByProviderAccountId.clear();
+function refreshUserIndexes(database: IndexedDatabase, user: StoredUser) {
+  database.userById.set(user.id, user);
 
-  for (const user of database.users) {
-    database.userById.set(user.id, user);
-    database.userByEmail.set(user.email.toLowerCase(), user);
-    database.userByProviderAccountId.set(user.providerAccountId, user);
+  for (const [email, indexedUser] of database.userByEmail.entries()) {
+    if (indexedUser.id === user.id && email !== user.email.toLowerCase()) {
+      database.userByEmail.delete(email);
+    }
   }
+
+  for (const [providerAccountId, indexedUser] of database.userByProviderAccountId.entries()) {
+    if (indexedUser.id === user.id && providerAccountId !== user.providerAccountId) {
+      database.userByProviderAccountId.delete(providerAccountId);
+    }
+  }
+
+  database.userByEmail.set(user.email.toLowerCase(), user);
+  database.userByProviderAccountId.set(user.providerAccountId, user);
 }
 
 function refreshTasksIndex(database: IndexedDatabase, userId: string) {
@@ -174,27 +181,36 @@ function refreshTasksIndex(database: IndexedDatabase, userId: string) {
   database.tasksByUserId.set(userId, tasks);
 }
 
-function refreshSubscriptionIndexes(database: IndexedDatabase) {
-  database.subscriptionByUserId.clear();
-  database.subscriptionByStripeCustomerId.clear();
-  database.subscriptionByStripeSubscriptionId.clear();
+function refreshSubscriptionIndexes(database: IndexedDatabase, subscription: StoredSubscription) {
+  database.subscriptionByUserId.set(subscription.userId, subscription);
 
-  for (const subscription of database.subscriptions) {
-    database.subscriptionByUserId.set(subscription.userId, subscription);
-
-    if (subscription.stripeCustomerId) {
-      database.subscriptionByStripeCustomerId.set(
-        subscription.stripeCustomerId,
-        subscription
-      );
+  for (const [customerId, indexedSubscription] of database.subscriptionByStripeCustomerId.entries()) {
+    if (
+      indexedSubscription.userId === subscription.userId &&
+      customerId !== subscription.stripeCustomerId
+    ) {
+      database.subscriptionByStripeCustomerId.delete(customerId);
     }
+  }
 
-    if (subscription.stripeSubscriptionId) {
-      database.subscriptionByStripeSubscriptionId.set(
-        subscription.stripeSubscriptionId,
-        subscription
-      );
+  for (const [subscriptionId, indexedSubscription] of database.subscriptionByStripeSubscriptionId.entries()) {
+    if (
+      indexedSubscription.userId === subscription.userId &&
+      subscriptionId !== subscription.stripeSubscriptionId
+    ) {
+      database.subscriptionByStripeSubscriptionId.delete(subscriptionId);
     }
+  }
+
+  if (subscription.stripeCustomerId) {
+    database.subscriptionByStripeCustomerId.set(subscription.stripeCustomerId, subscription);
+  }
+
+  if (subscription.stripeSubscriptionId) {
+    database.subscriptionByStripeSubscriptionId.set(
+      subscription.stripeSubscriptionId,
+      subscription
+    );
   }
 }
 
@@ -204,7 +220,12 @@ export function updateIndexesOnWrite(
   record: unknown
 ) {
   if (entity === 'user') {
-    refreshUserIndexes(database);
+    const user = record as StoredUser | null;
+    if (!user) {
+      return;
+    }
+
+    refreshUserIndexes(database, user);
     return;
   }
 
@@ -218,7 +239,12 @@ export function updateIndexesOnWrite(
     return;
   }
 
-  refreshSubscriptionIndexes(database);
+  const subscription = record as StoredSubscription | null;
+  if (!subscription) {
+    return;
+  }
+
+  refreshSubscriptionIndexes(database, subscription);
 }
 
 function ensureStoreFile() {
