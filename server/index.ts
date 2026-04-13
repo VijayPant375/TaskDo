@@ -8,6 +8,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
 import { connectDB } from './lib/db.js';
+import authRoutes from './routes/auth.js';
 import {
   accessCookieName,
   clearAuthCookies,
@@ -487,6 +488,7 @@ app.use(
 );
 app.use(express.json());
 app.use('/api/auth/', authLimiter);
+app.use('/api/auth', authRoutes);
 app.use('/api/', apiLimiter);
 
 app.get('/api/health', (_request, response) => {
