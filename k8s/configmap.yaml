@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskdo-config
+  namespace: taskdo
+data:
+  NODE_ENV: "production"
+  PORT: "3001"
+  MONGO_URI: "mongodb://mongo-service:27017/taskdo"
+  REDIS_URL: "redis://redis-service:6379"

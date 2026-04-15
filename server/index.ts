@@ -523,11 +523,7 @@ app.use('/api/', apiLimiter);
 app.use('/api/mfa', requireAuth, mfaRoutes);
 
 app.get('/api/health', (_request, response) => {
-  response.json({
-    googleOAuthConfigured: isGoogleOAuthConfigured,
-    ok: true,
-    stripeConfigured: Boolean(stripe),
-  });
+  response.send('OK');
 });
 
 app.get('/api/auth/session', async (request, response) => {

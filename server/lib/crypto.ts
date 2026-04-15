@@ -4,6 +4,7 @@ import { chacha20poly1305 } from '@noble/ciphers/chacha.js';
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const encryptionKeyCache = new Map<string, Uint8Array>();
+const authTagLength = 16;
 
 function getEncryptionKeyValue() {
   const key = process.env.ENCRYPTION_KEY?.trim();
@@ -44,16 +45,22 @@ function fromBase64(value: string) {
 export function encrypt(value: string) {
   const nonce = randomBytes(12);
   const cipher = chacha20poly1305(getEncryptionKeyBytes(), nonce);
-  const encrypted = cipher.encrypt(textEncoder.encode(value));
+  const sealed = cipher.encrypt(textEncoder.encode(value));
+  const encrypted = sealed.subarray(0, sealed.length - authTagLength);
+  const authTag = sealed.subarray(sealed.length - authTagLength);
 
   return {
+    authTag: toBase64(authTag),
     encrypted: toBase64(encrypted),
     nonce: toBase64(nonce),
   };
 }
 
-export function decrypt(encrypted: string, nonce: string) {
+export function decrypt(encrypted: string, nonce: string, authTag?: string) {
   const cipher = chacha20poly1305(getEncryptionKeyBytes(), fromBase64(nonce));
-  const decrypted = cipher.decrypt(fromBase64(encrypted));
+  const sealed = authTag
+    ? Buffer.concat([Buffer.from(encrypted, 'base64'), Buffer.from(authTag, 'base64')])
+    : Buffer.from(encrypted, 'base64');
+  const decrypted = cipher.decrypt(new Uint8Array(sealed));
   return textDecoder.decode(decrypted);
 }

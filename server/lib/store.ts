@@ -19,6 +19,7 @@ export interface StoredTask {
   description?: string;
   _encrypted?: string;
   _nonce?: string;
+  _authTag?: string;
   deadline: string;
   priority: 'high' | 'medium' | 'low';
   notificationEnabled: boolean;
@@ -101,6 +102,19 @@ const emptyDatabase: DatabaseShape = {
 
 type TaskContent = Pick<StoredTask, 'description' | 'name'>;
 
+function splitLegacyEncryptedPayload(value: string) {
+  const sealed = Buffer.from(value, 'base64');
+
+  if (sealed.length <= 16) {
+    throw new Error('Encrypted task payload is invalid.');
+  }
+
+  return {
+    authTag: sealed.subarray(sealed.length - 16).toString('base64'),
+    encrypted: sealed.subarray(0, sealed.length - 16).toString('base64'),
+  };
+}
+
 function decryptTaskContent(task: StoredTask): TaskContent {
   if (!task._encrypted) {
     return {
@@ -113,7 +127,14 @@ function decryptTaskContent(task: StoredTask): TaskContent {
     throw new Error(`Task ${task.id} is missing its encryption nonce.`);
   }
 
-  const decrypted = decrypt(task._encrypted, task._nonce);
+  const encryptedPayload = task._authTag
+    ? { authTag: task._authTag, encrypted: task._encrypted }
+    : splitLegacyEncryptedPayload(task._encrypted);
+  const decrypted = decrypt(
+    encryptedPayload.encrypted,
+    task._nonce,
+    encryptedPayload.authTag
+  );
   const parsed = JSON.parse(decrypted) as Partial<TaskContent>;
 
   return {
@@ -127,9 +148,10 @@ function encryptTaskContent(input: TaskContent) {
     description: input.description ?? '',
     name: input.name ?? '',
   });
-  const { encrypted, nonce } = encrypt(payload);
+  const { authTag, encrypted, nonce } = encrypt(payload);
 
   return {
+    _authTag: authTag,
     _encrypted: encrypted,
     _nonce: nonce,
   };
@@ -732,7 +754,16 @@ export function migrateTaskEncryptionForUser(userId: string) {
     let migratedCount = 0;
 
     for (const task of database.tasksByUserId.get(userId) ?? []) {
-      if (task._encrypted) {
+      if (task._encrypted && task._authTag) {
+        continue;
+      }
+
+      if (task._encrypted && !task._authTag) {
+        const encryptedPayload = splitLegacyEncryptedPayload(task._encrypted);
+        task._encrypted = encryptedPayload.encrypted;
+        task._authTag = encryptedPayload.authTag;
+        task.updatedAt = new Date().toISOString();
+        migratedCount += 1;
         continue;
       }
 
@@ -741,6 +772,7 @@ export function migrateTaskEncryptionForUser(userId: string) {
         name: task.name ?? '',
       });
 
+      task._authTag = encryptedContent._authTag;
       task._encrypted = encryptedContent._encrypted;
       task._nonce = encryptedContent._nonce;
       task.name = undefined;
