@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { getRequiredEnv } from '../lib/env.js';
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -18,7 +19,7 @@ export function authenticate(
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { id?: string };
+    const payload = jwt.verify(token, getRequiredEnv('JWT_ACCESS_SECRET')) as { id?: string };
     request.userId = payload.id;
     next();
   } catch {
@@ -34,7 +35,7 @@ export function getBearerUserId(request: Request) {
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as { id?: string };
+    const payload = jwt.verify(token, getRequiredEnv('JWT_ACCESS_SECRET')) as { id?: string };
     return typeof payload.id === 'string' ? payload.id : null;
   } catch {
     return null;

@@ -56,6 +56,7 @@ import {
   signJwt,
   verifyJwt,
 } from './lib/tokens.js';
+import { getRequiredEnv } from './lib/env.js';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const serverDirectory = path.dirname(currentFilePath);
@@ -79,8 +80,8 @@ const app = express();
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? '0.0.0.0';
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
-const jwtAccessSecret = process.env.JWT_ACCESS_SECRET ?? 'taskdo-dev-access-secret';
-const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET ?? 'taskdo-dev-refresh-secret';
+const jwtAccessSecret = getRequiredEnv('JWT_ACCESS_SECRET');
+const jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const googleRedirectUri =

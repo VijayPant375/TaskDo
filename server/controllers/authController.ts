@@ -4,15 +4,10 @@ import jwt from 'jsonwebtoken';
 import { upsertLocalUser } from '../lib/store.js';
 import { verifyMfaToken } from '../lib/mfa.js';
 import { User } from '../models/User.js';
+import { getRequiredEnv } from '../lib/env.js';
 
 function getJwtSecret() {
-  const secret = process.env.JWT_SECRET?.trim();
-
-  if (!secret) {
-    throw new Error('JWT_SECRET is not configured.');
-  }
-
-  return secret;
+  return getRequiredEnv('JWT_ACCESS_SECRET');
 }
 
 function getErrorMessage(error: unknown) {

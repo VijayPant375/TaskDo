@@ -6,3 +6,6 @@ services:
     buildCommand: npm run render:build
     startCommand: npm run render:start
     autoDeploy: true
+    envVars:
+      - key: ENCRYPTION_KEY
+        sync: false
