@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: taskdo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: backend
+          image: taskdo-backend:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+          envFrom:
+            - configMapRef:
+                name: taskdo-config
+            - secretRef:
+                name: taskdo-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: 3001
+            failureThreshold: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
