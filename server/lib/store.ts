@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { decrypt, encrypt } from './crypto.js';
 import {
   getRedisClient,
   deleteSession as deleteRedisSession,
@@ -14,8 +15,10 @@ import {
 export interface StoredTask {
   id: string;
   userId: string;
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
+  _encrypted?: string;
+  _nonce?: string;
   deadline: string;
   priority: 'high' | 'medium' | 'low';
   notificationEnabled: boolean;
@@ -95,6 +98,56 @@ const emptyDatabase: DatabaseShape = {
   tasks: [],
   users: [],
 };
+
+type TaskContent = Pick<StoredTask, 'description' | 'name'>;
+
+function decryptTaskContent(task: StoredTask): TaskContent {
+  if (!task._encrypted) {
+    return {
+      description: task.description ?? '',
+      name: task.name ?? '',
+    };
+  }
+
+  if (!task._nonce) {
+    throw new Error(`Task ${task.id} is missing its encryption nonce.`);
+  }
+
+  const decrypted = decrypt(task._encrypted, task._nonce);
+  const parsed = JSON.parse(decrypted) as Partial<TaskContent>;
+
+  return {
+    description: typeof parsed.description === 'string' ? parsed.description : '',
+    name: typeof parsed.name === 'string' ? parsed.name : '',
+  };
+}
+
+function encryptTaskContent(input: TaskContent) {
+  const payload = JSON.stringify({
+    description: input.description ?? '',
+    name: input.name ?? '',
+  });
+  const { encrypted, nonce } = encrypt(payload);
+
+  return {
+    _encrypted: encrypted,
+    _nonce: nonce,
+  };
+}
+
+function withDecryptedTaskContent(task: StoredTask): StoredTask {
+  const content = decryptTaskContent(task);
+
+  return {
+    ...task,
+    description: content.description,
+    name: content.name,
+  };
+}
+
+function buildTaskSignature(task: Pick<StoredTask, 'alarmTime' | 'deadline'> & TaskContent) {
+  return `${task.name ?? ''}::${task.deadline}::${task.alarmTime}`;
+}
 
 function cloneDatabaseShape(database: DatabaseShape): DatabaseShape {
   return {
@@ -545,7 +598,9 @@ export async function pruneExpiredSessions() {
 
 export function listTasksByUser(userId: string) {
   const tasks = readDatabase().tasksByUserId.get(userId) ?? [];
-  return [...tasks].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  return [...tasks]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .map(withDecryptedTaskContent);
 }
 
 export function countActiveTasksByUser(userId: string) {
@@ -558,17 +613,24 @@ export function createTaskForUser(
 ) {
   return mutateDatabase((database) => {
     const now = new Date().toISOString();
+    const encryptedContent = encryptTaskContent({
+      description: input.description ?? '',
+      name: input.name ?? '',
+    });
     const task: StoredTask = {
       ...input,
+      ...encryptedContent,
       createdAt: now,
+      description: undefined,
       id: randomUUID(),
+      name: undefined,
       updatedAt: now,
       userId,
     };
 
     database.tasks.push(task);
     updateIndexesOnWrite(database, 'task', task);
-    return task;
+    return withDecryptedTaskContent(task);
   });
 }
 
@@ -584,9 +646,21 @@ export function updateTaskForUser(
       return null;
     }
 
-    Object.assign(task, input, { updatedAt: new Date().toISOString() });
+    const nextContent = {
+      ...decryptTaskContent(task),
+      description: input.description ?? decryptTaskContent(task).description,
+      name: input.name ?? decryptTaskContent(task).name,
+    };
+    const encryptedContent = encryptTaskContent(nextContent);
+
+    Object.assign(task, input, encryptedContent, {
+      description: undefined,
+      name: undefined,
+      updatedAt: new Date().toISOString(),
+    });
+
     updateIndexesOnWrite(database, 'task', task);
-    return task;
+    return withDecryptedTaskContent(task);
   });
 }
 
@@ -611,23 +685,31 @@ export function importTasksForUser(
   return mutateDatabase((database) => {
     const now = new Date().toISOString();
     const existingSignatures = new Set(
-      (database.tasksByUserId.get(userId) ?? []).map(
-        (task) => `${task.name}::${task.deadline}::${task.alarmTime}`
-      )
+      (database.tasksByUserId.get(userId) ?? []).map((task) => {
+        const content = decryptTaskContent(task);
+        return buildTaskSignature({ ...task, ...content });
+      })
     );
 
     const created: StoredTask[] = [];
 
     for (const input of tasks) {
-      const signature = `${input.name}::${input.deadline}::${input.alarmTime}`;
+      const signature = buildTaskSignature(input);
       if (existingSignatures.has(signature)) {
         continue;
       }
 
+      const encryptedContent = encryptTaskContent({
+        description: input.description ?? '',
+        name: input.name ?? '',
+      });
       const task: StoredTask = {
         ...input,
+        ...encryptedContent,
         createdAt: now,
+        description: undefined,
         id: randomUUID(),
+        name: undefined,
         updatedAt: now,
         userId,
       };
@@ -641,7 +723,37 @@ export function importTasksForUser(
       updateIndexesOnWrite(database, 'task', { userId } satisfies Pick<StoredTask, 'userId'>);
     }
 
-    return created;
+    return created.map(withDecryptedTaskContent);
+  });
+}
+
+export function migrateTaskEncryptionForUser(userId: string) {
+  return mutateDatabase((database) => {
+    let migratedCount = 0;
+
+    for (const task of database.tasksByUserId.get(userId) ?? []) {
+      if (task._encrypted) {
+        continue;
+      }
+
+      const encryptedContent = encryptTaskContent({
+        description: task.description ?? '',
+        name: task.name ?? '',
+      });
+
+      task._encrypted = encryptedContent._encrypted;
+      task._nonce = encryptedContent._nonce;
+      task.name = undefined;
+      task.description = undefined;
+      task.updatedAt = new Date().toISOString();
+      migratedCount += 1;
+    }
+
+    if (migratedCount > 0) {
+      updateIndexesOnWrite(database, 'task', { userId } satisfies Pick<StoredTask, 'userId'>);
+    }
+
+    return migratedCount;
   });
 }
 

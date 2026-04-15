@@ -40,6 +40,7 @@ import {
   getUserById,
   importTasksForUser,
   listTasksByUser,
+  migrateTaskEncryptionForUser,
   saveOAuthState,
   updateSessionRefreshToken,
   updateTaskForUser,
@@ -823,6 +824,16 @@ app.post('/api/tasks/import', requireAuth, (request: AuthenticatedRequest, respo
 
   const imported = importTasksForUser(userId, sanitizedTasks);
   response.status(201).json(imported);
+});
+
+app.post('/api/tasks/migrate-encryption', requireAuth, (request: AuthenticatedRequest, response) => {
+  try {
+    const migrated = migrateTaskEncryptionForUser(request.authUser!.id);
+    response.json({ migrated });
+  } catch (error) {
+    console.error('Failed to migrate task encryption.', error);
+    response.status(500).send('Unable to migrate task encryption.');
+  }
 });
 
 app.post('/api/create-checkout-session', requireAuth, async (request: AuthenticatedRequest, response) => {
