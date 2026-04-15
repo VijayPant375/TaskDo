@@ -80,7 +80,6 @@ export function AuthLandingScreen({
       <MFAVerification
         email={mfaChallengeEmail}
         error={error}
-        helpText="MFA setup and verification inside settings are ready. Password login MFA still needs a backend completion endpoint after the first challenge response."
         isSubmitting={isVerifyingMfa}
         onBack={() => {
           setError('');

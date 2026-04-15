@@ -529,8 +529,9 @@ app.get('/api/health', (_request, response) => {
   });
 });
 
-app.get('/api/auth/session', (request, response) => {
+app.get('/api/auth/session', async (request, response) => {
   const user = getAuthenticatedUserFromRequest(request);
+  const mongoUser = user ? await User.findById(user.id).select('mfaEnabled') : null;
 
   response.json({
     googleOAuthEnabled: isGoogleOAuthConfigured,
@@ -540,6 +541,7 @@ app.get('/api/auth/session', (request, response) => {
           avatarUrl: user.avatarUrl,
           email: user.email,
           id: user.id,
+          mfaEnabled: Boolean(mongoUser?.mfaEnabled),
           name: user.name,
         }
       : null,

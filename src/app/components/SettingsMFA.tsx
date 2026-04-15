@@ -1,15 +1,14 @@
 import { ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { disableMFA, enableMFA, setupMFA, verifyMFA, type MFASetupResponse } from '../../services/mfa';
 import { MFASetup } from './MFASetup';
 import { Button } from './ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from './ui/input-otp';
 
-type MfaStatus = 'unknown' | 'enabled' | 'disabled';
-
 export function SettingsMFA() {
+  const { refreshSession, user } = useAuth();
   const [setupData, setSetupData] = useState<MFASetupResponse | null>(null);
-  const [status, setStatus] = useState<MfaStatus>('unknown');
   const [verifyToken, setVerifyToken] = useState('');
   const [disableToken, setDisableToken] = useState('');
   const [error, setError] = useState('');
@@ -18,6 +17,7 @@ export function SettingsMFA() {
   const [isEnabling, setIsEnabling] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isDisabling, setIsDisabling] = useState(false);
+  const status = setupData ? 'disabled' : user?.mfaEnabled ? 'enabled' : 'disabled';
 
   const clearMessages = () => {
     setError('');
@@ -30,8 +30,9 @@ export function SettingsMFA() {
 
     try {
       const response = await setupMFA();
+      setVerifyToken('');
+      setDisableToken('');
       setSetupData(response);
-      setStatus('disabled');
     } catch (setupError) {
       setError(setupError instanceof Error ? setupError.message : 'Unable to start MFA setup.');
     } finally {
@@ -45,8 +46,10 @@ export function SettingsMFA() {
 
     try {
       await enableMFA(token);
+      await refreshSession();
       setSetupData(null);
-      setStatus('enabled');
+      setVerifyToken('');
+      setDisableToken('');
       setSuccess('MFA is now enabled for your account.');
     } catch (enableError) {
       setError(enableError instanceof Error ? enableError.message : 'Unable to enable MFA.');
@@ -65,7 +68,6 @@ export function SettingsMFA() {
 
     try {
       await verifyMFA(verifyToken);
-      setStatus('enabled');
       setVerifyToken('');
       setSuccess('Authenticator code verified successfully.');
     } catch (verifyError) {
@@ -85,9 +87,10 @@ export function SettingsMFA() {
 
     try {
       await disableMFA(disableToken);
+      await refreshSession();
       setDisableToken('');
+      setVerifyToken('');
       setSetupData(null);
-      setStatus('disabled');
       setSuccess('MFA has been disabled.');
     } catch (disableError) {
       setError(disableError instanceof Error ? disableError.message : 'Unable to disable MFA.');
@@ -135,10 +138,10 @@ export function SettingsMFA() {
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button
             className="bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
-            disabled={isSettingUp}
+            disabled={isSettingUp || Boolean(user?.mfaEnabled)}
             onClick={() => void handleStartSetup()}
           >
-            {isSettingUp ? 'Preparing setup...' : 'Set up MFA'}
+            {isSettingUp ? 'Preparing setup...' : user?.mfaEnabled ? 'MFA is enabled' : 'Set up MFA'}
           </Button>
         </div>
       ) : null}
@@ -169,7 +172,7 @@ export function SettingsMFA() {
           </div>
           <Button
             className="mt-4"
-            disabled={isVerifying || verifyToken.length !== 6}
+            disabled={isVerifying || verifyToken.length !== 6 || !user?.mfaEnabled}
             onClick={() => void handleVerify()}
             variant="outline"
           >
@@ -202,7 +205,7 @@ export function SettingsMFA() {
           </div>
           <Button
             className="mt-4"
-            disabled={isDisabling || disableToken.length !== 6}
+            disabled={isDisabling || disableToken.length !== 6 || !user?.mfaEnabled}
             onClick={() => void handleDisable()}
             variant="outline"
           >
@@ -210,6 +213,12 @@ export function SettingsMFA() {
           </Button>
         </div>
       </div>
+
+      {!user?.mfaEnabled && !setupData ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          If you enable MFA again after disabling it, scan the newly generated QR code. Old authenticator entries will no longer work.
+        </p>
+      ) : null}
 
       {success ? <p className="mt-4 text-sm text-emerald-600">{success}</p> : null}
       {error && !setupData ? <p className="mt-4 text-sm text-rose-500">{error}</p> : null}

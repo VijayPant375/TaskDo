@@ -40,10 +40,24 @@ export async function login(data: Pick<AuthSubmission, 'email' | 'password'>) {
   const result = (await response.json()) as AuthResponse;
 
   if (result.requiresMFA) {
-    return { requiresMFA: true, email: result.email };
+    return { requiresMFA: true, email: result.email, mfaToken: result.mfaToken };
   }
 
   return result;
+}
+
+export async function verifyLoginMFA(data: { mfaToken: string; token: string }) {
+  const response = await fetch(`${AUTH_API_BASE}/login/mfa`, {
+    body: JSON.stringify(data),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return (await response.json()) as AuthResponse;
 }
 
 export async function checkUsername(username: string) {

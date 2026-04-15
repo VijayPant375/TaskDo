@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { upsertLocalUser } from '../lib/store.js';
+import { verifyMfaToken } from '../lib/mfa.js';
 import { User } from '../models/User.js';
 
 function getJwtSecret() {
@@ -20,6 +21,53 @@ function getErrorMessage(error: unknown) {
 
 export function createAuthToken(userId: string) {
   return jwt.sign({ id: userId }, getJwtSecret());
+}
+
+function createMfaChallengeToken(userId: string) {
+  return jwt.sign({ purpose: 'mfa-login', sub: userId }, getJwtSecret(), {
+    expiresIn: '10m',
+  });
+}
+
+function verifyMfaChallengeToken(token: string) {
+  let payload: { purpose?: string; sub?: string };
+
+  try {
+    payload = jwt.verify(token, getJwtSecret()) as { purpose?: string; sub?: string };
+  } catch {
+    throw new Error('Invalid MFA challenge token');
+  }
+
+  if (payload.purpose !== 'mfa-login' || typeof payload.sub !== 'string') {
+    throw new Error('Invalid MFA challenge token');
+  }
+
+  return payload.sub;
+}
+
+function serializeAuthResponse(user: {
+  email: string;
+  mfaEnabled?: boolean;
+  username: string;
+  _id: { toString(): string };
+}) {
+  const authUser = upsertLocalUser({
+    email: user.email,
+    id: user._id.toString(),
+    name: user.username,
+  });
+
+  const token = createAuthToken(authUser.id);
+
+  return {
+    token,
+    user: {
+      email: user.email,
+      id: authUser.id,
+      mfaEnabled: Boolean(user.mfaEnabled),
+      username: user.username,
+    },
+  };
 }
 
 export async function signup(request: Request, response: Response) {
@@ -48,22 +96,7 @@ export async function signup(request: Request, response: Response) {
       username,
     });
 
-    const authUser = upsertLocalUser({
-      email: user.email,
-      id: user._id.toString(),
-      name: user.username,
-    });
-
-    const token = createAuthToken(authUser.id);
-
-    response.json({
-      token,
-      user: {
-        email: user.email,
-        id: authUser.id,
-        username: user.username,
-      },
-    });
+    response.json(serializeAuthResponse(user));
   } catch (error) {
     response.status(500).json({ error: getErrorMessage(error) });
   }
@@ -87,28 +120,57 @@ export async function login(request: Request, response: Response) {
     }
 
     if (user.mfaEnabled) {
-      response.json({ requiresMFA: true, email: user.email });
+      response.json({
+        email: user.email,
+        mfaToken: createMfaChallengeToken(user._id.toString()),
+        requiresMFA: true,
+      });
       return;
     }
 
-    const authUser = upsertLocalUser({
-      email: user.email,
-      id: user._id.toString(),
-      name: user.username,
-    });
+    response.json(serializeAuthResponse(user));
+  } catch (error) {
+    response.status(500).json({ error: getErrorMessage(error) });
+  }
+}
 
-    const token = createAuthToken(authUser.id);
+export async function verifyLoginMfa(request: Request, response: Response) {
+  try {
+    const challengeToken =
+      typeof request.body.mfaToken === 'string' ? request.body.mfaToken.trim() : '';
+    const totpToken = typeof request.body.token === 'string' ? request.body.token.trim() : '';
+
+    if (!challengeToken || !totpToken) {
+      response.status(400).json({ error: 'MFA challenge token and code are required' });
+      return;
+    }
+
+    const userId = verifyMfaChallengeToken(challengeToken);
+    const user = await User.findById(userId);
+
+    if (!user || !user.mfaEnabled || !user.mfaSecret) {
+      response.status(400).json({ error: 'MFA is not enabled for this account' });
+      return;
+    }
+
+    if (!verifyMfaToken(user.mfaSecret, totpToken.replace(/\s+/g, ''))) {
+      response.status(400).json({ error: 'Invalid MFA token' });
+      return;
+    }
 
     response.json({
-      token,
+      token: createAuthToken(user._id.toString()),
       user: {
         email: user.email,
-        id: authUser.id,
+        id: user._id.toString(),
+        mfaEnabled: true,
         username: user.username,
       },
     });
   } catch (error) {
-    response.status(500).json({ error: getErrorMessage(error) });
+    const message = getErrorMessage(error);
+    const status = message === 'Invalid MFA challenge token' ? 401 : 500;
+    response.status(status).json({ error: status === 401 ? message : getErrorMessage(error) });
   }
 }
 

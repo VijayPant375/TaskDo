@@ -3,6 +3,7 @@ export interface AuthUser {
   email: string;
   name: string;
   avatarUrl: string | null;
+  mfaEnabled?: boolean;
   username?: string;
 }
 
@@ -17,10 +18,12 @@ export interface AuthResponse {
   user?: {
     id: string;
     email: string;
+    mfaEnabled?: boolean;
     username: string;
   };
   requiresMFA?: boolean;
   email?: string;
+  mfaToken?: string;
 }
 
 export interface AuthSubmission {

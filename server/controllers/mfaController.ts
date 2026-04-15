@@ -34,6 +34,11 @@ export async function generateMFASetup(request: MfaRequest, response: Response) 
       return;
     }
 
+    if (user.mfaEnabled) {
+      response.status(400).json({ error: 'Disable MFA before setting up a new authenticator app' });
+      return;
+    }
+
     const { base32, otpauthUrl } = generateMfaSecret(user.email);
     const qrCodeDataUrl = await generateMfaQrCode(otpauthUrl);
 
