@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Cloud, LoaderCircle, ShieldCheck, Sparkles, XCircle } from 'lucide-react';
 import { checkUsername } from '../../api/auth';
+import { MFAVerification } from './MFAVerification';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
 interface AuthLandingScreenProps {
   googleOAuthEnabled: boolean;
   isLoading: boolean;
+  mfaChallengeEmail?: string | null;
+  onCompleteMFA?: (token: string) => Promise<void>;
+  onExitMFA?: () => void;
   onLogin: (credentials: { email: string; password: string }) => Promise<void>;
   onContinueWithGoogle: () => void;
   onSignUp: (credentials: { email: string; username: string; password: string }) => Promise<void>;
@@ -21,6 +25,9 @@ const featureList = [
 export function AuthLandingScreen({
   googleOAuthEnabled,
   isLoading,
+  mfaChallengeEmail,
+  onCompleteMFA,
+  onExitMFA,
   onLogin,
   onContinueWithGoogle,
   onSignUp,
@@ -31,6 +38,7 @@ export function AuthLandingScreen({
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState(false);
   const [usernameState, setUsernameState] = useState<
     'idle' | 'checking' | 'available' | 'taken' | 'invalid'
   >('idle');
@@ -66,6 +74,37 @@ export function AuthLandingScreen({
 
     return () => window.clearTimeout(timeoutId);
   }, [mode, username]);
+
+  if (mfaChallengeEmail && onCompleteMFA && onExitMFA) {
+    return (
+      <MFAVerification
+        email={mfaChallengeEmail}
+        error={error}
+        helpText="MFA setup and verification inside settings are ready. Password login MFA still needs a backend completion endpoint after the first challenge response."
+        isSubmitting={isVerifyingMfa}
+        onBack={() => {
+          setError('');
+          onExitMFA();
+        }}
+        onSubmit={async (token) => {
+          setError('');
+          setIsVerifyingMfa(true);
+
+          try {
+            await onCompleteMFA(token);
+          } catch (submissionError) {
+            setError(
+              submissionError instanceof Error
+                ? submissionError.message
+                : 'Unable to verify MFA code.'
+            );
+          } finally {
+            setIsVerifyingMfa(false);
+          }
+        }}
+      />
+    );
+  }
 
   const handleSubmit = async () => {
     setError('');

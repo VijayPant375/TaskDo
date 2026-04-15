@@ -13,12 +13,14 @@ export interface AuthSessionResponse {
 }
 
 export interface AuthResponse {
-  token: string;
-  user: {
+  token?: string;
+  user?: {
     id: string;
     email: string;
     username: string;
   };
+  requiresMFA?: boolean;
+  email?: string;
 }
 
 export interface AuthSubmission {

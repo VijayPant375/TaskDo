@@ -37,7 +37,13 @@ export async function login(data: Pick<AuthSubmission, 'email' | 'password'>) {
     throw new Error(await parseError(response));
   }
 
-  return (await response.json()) as AuthResponse;
+  const result = (await response.json()) as AuthResponse;
+
+  if (result.requiresMFA) {
+    return { requiresMFA: true, email: result.email };
+  }
+
+  return result;
 }
 
 export async function checkUsername(username: string) {

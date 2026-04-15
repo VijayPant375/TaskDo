@@ -3,6 +3,7 @@ import { openCustomerPortal } from '../../services/stripe';
 import { FREE_TASK_LIMIT } from '../../types/subscription';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { PremiumBadge } from './PremiumBadge';
+import { SettingsMFA } from './SettingsMFA';
 import { Button } from './ui/button';
 import { useAuth } from '../../context/AuthContext';
 
@@ -96,6 +97,8 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
               </Button>
             )}
           </section>
+
+          {isAuthenticated ? <SettingsMFA /> : null}
 
           <section className="rounded-3xl border bg-card p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">

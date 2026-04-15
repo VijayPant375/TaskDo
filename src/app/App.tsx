@@ -21,10 +21,13 @@ function AppContent() {
   const { theme, setTheme } = useTheme();
   const { canCreateTask, isPremium } = useSubscription();
   const {
+    clearMfaChallenge,
+    completeMfaChallenge,
     googleOAuthEnabled,
     isAuthenticated,
     isLoading: isAuthLoading,
     loginWithPassword,
+    mfaChallengeEmail,
     signInWithGoogle,
     signUpWithPassword,
     signOut,
@@ -167,8 +170,11 @@ function AppContent() {
       <AuthLandingScreen
         googleOAuthEnabled={googleOAuthEnabled}
         isLoading={isAuthLoading}
+        mfaChallengeEmail={mfaChallengeEmail}
+        onCompleteMFA={completeMfaChallenge}
         onLogin={loginWithPassword}
         onContinueWithGoogle={signInWithGoogle}
+        onExitMFA={clearMfaChallenge}
         onSignUp={signUpWithPassword}
       />
     );

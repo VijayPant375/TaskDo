@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { login as loginRequest, signup as signupRequest } from '../api/auth';
 import { fetchAuthSession, logout as logoutRequest, startGoogleSignIn } from '../services/auth';
+import { verifyMFA as verifyMFARequest } from '../services/mfa';
 import type { AuthResponse, AuthSubmission, AuthUser } from '../types/auth';
 
 const authTokenStorageKey = 'taskdo.token';
@@ -55,6 +56,9 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   loginWithPassword: (credentials: Pick<AuthSubmission, 'email' | 'password'>) => Promise<void>;
+  mfaChallengeEmail: string | null;
+  clearMfaChallenge: () => void;
+  completeMfaChallenge: (token: string) => Promise<void>;
   refreshSession: () => Promise<void>;
   signInWithGoogle: () => void;
   signUpWithPassword: (credentials: AuthSubmission) => Promise<void>;
@@ -68,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
+  const [mfaChallengeEmail, setMfaChallengeEmail] = useState<string | null>(null);
 
   const refreshSession = async () => {
     setIsLoading(true);
@@ -120,10 +125,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       loginWithPassword: async (credentials) => {
         const response = await loginRequest(credentials);
+        if (response.requiresMFA && response.email) {
+          clearStoredAuthentication();
+          setUser(null);
+          setMfaChallengeEmail(response.email);
+          return;
+        }
+
+        if (!response.token || !response.user) {
+          throw new Error('Authentication response is incomplete.');
+        }
+
         const nextUser = mapAuthResponseUser(response.user);
         storeAuthenticatedUser(response.token, nextUser);
+        setMfaChallengeEmail(null);
         setUser(nextUser);
         redirectToApp();
+      },
+      mfaChallengeEmail,
+      clearMfaChallenge: () => setMfaChallengeEmail(null),
+      completeMfaChallenge: async (token) => {
+        try {
+          await verifyMFARequest(token);
+        } catch (error) {
+          if (error instanceof Error) {
+            throw new Error(
+              error.message ||
+                'MFA verification could not be completed for password sign-in yet.'
+            );
+          }
+
+          throw new Error('MFA verification could not be completed for password sign-in yet.');
+        }
+
+        throw new Error(
+          'Your backend currently verifies MFA only for authenticated sessions. Add a login completion endpoint before password sign-in can finish with MFA.'
+        );
       },
       refreshSession,
       signInWithGoogle: () => {
@@ -131,19 +168,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       signUpWithPassword: async (credentials) => {
         const response = await signupRequest(credentials);
+        if (!response.token || !response.user) {
+          throw new Error('Authentication response is incomplete.');
+        }
+
         const nextUser = mapAuthResponseUser(response.user);
         storeAuthenticatedUser(response.token, nextUser);
+        setMfaChallengeEmail(null);
         setUser(nextUser);
         redirectToApp();
       },
       signOut: async () => {
         clearStoredAuthentication();
+        setMfaChallengeEmail(null);
         await logoutRequest();
         setUser(null);
       },
       user,
     }),
-    [googleOAuthEnabled, isLoading, user]
+    [googleOAuthEnabled, isLoading, mfaChallengeEmail, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
