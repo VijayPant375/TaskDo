@@ -86,6 +86,11 @@ export async function login(request: Request, response: Response) {
       return;
     }
 
+    if (user.mfaEnabled) {
+      response.json({ requiresMFA: true, email: user.email });
+      return;
+    }
+
     const authUser = upsertLocalUser({
       email: user.email,
       id: user._id.toString(),

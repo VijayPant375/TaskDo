@@ -5,6 +5,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, unique: true, required: true, index: true },
   password: String,
   googleId: String,
+  mfaSecret: String,
+  mfaEnabled: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });
 

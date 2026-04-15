@@ -12,6 +12,7 @@ import { connectDB } from './lib/db.js';
 import { getBearerUserId } from './middleware/auth.js';
 import { User } from './models/User.js';
 import authRoutes from './routes/auth.js';
+import mfaRoutes from './routes/mfa.js';
 import {
   accessCookieName,
   clearAuthCookies,
@@ -517,6 +518,7 @@ app.use(express.json());
 app.use('/api/auth/', authLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/', apiLimiter);
+app.use('/api/mfa', requireAuth, mfaRoutes);
 
 app.get('/api/health', (_request, response) => {
   response.json({
