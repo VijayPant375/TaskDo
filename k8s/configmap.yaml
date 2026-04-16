@@ -8,3 +8,6 @@ data:
   PORT: "3001"
   MONGO_URI: "mongodb://mongo-service:27017/taskdo"
   REDIS_URL: "redis://redis-service:6379"
+  FRONTEND_URL: "http://localhost:8080"
+  GOOGLE_REDIRECT_URI: "http://localhost:8080/api/auth/google/callback"
+  GOOGLE_CALLBACK_URL: "http://localhost:8080/api/auth/google/callback"

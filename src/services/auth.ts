@@ -21,5 +21,5 @@ export function startGoogleSignIn(returnTo?: string) {
     url.searchParams.set('returnTo', returnTo);
   }
 
-  window.location.assign(url.toString());
+  window.location.href = url.toString();
 }

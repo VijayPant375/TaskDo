@@ -56,7 +56,6 @@ function redirectToApp() {
 }
 
 interface AuthContextValue {
-  googleOAuthEnabled: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   loginWithPassword: (credentials: Pick<AuthSubmission, 'email' | 'password'>) => Promise<void>;
@@ -76,7 +75,6 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [googleOAuthEnabled, setGoogleOAuthEnabled] = useState(false);
   const [mfaChallengeEmail, setMfaChallengeEmail] = useState<string | null>(null);
   const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
 
@@ -87,7 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = new URL(window.location.href);
       const tokenFromRedirect = url.searchParams.get('token');
       const session = await fetchAuthSession();
-      setGoogleOAuthEnabled(session.googleOAuthEnabled);
 
       if (session.user) {
         setUser(session.user);
@@ -132,7 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      googleOAuthEnabled,
       isAuthenticated: Boolean(user),
       isLoading,
       loginWithPassword: async (credentials) => {
@@ -205,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       user,
     }),
-    [googleOAuthEnabled, isLoading, mfaChallengeEmail, mfaChallengeToken, user]
+    [isLoading, mfaChallengeEmail, mfaChallengeToken, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

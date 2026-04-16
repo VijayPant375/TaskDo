@@ -190,10 +190,10 @@ ENCRYPTION_KEY=your-32-byte-encryption-key
 # OAuth (Optional)
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=http://localhost:3001/api/auth/google/callback
+GOOGLE_CALLBACK_URL=http://localhost:3001/api/auth/google/callback
 
 # Stripe (Optional)
-STRIPE_SECRET_KEY=sk_test_your_stripe_key
+STRIPE_SECRET_KEY=stripe_secret_key_here
 
 # Server
 PORT=3001
@@ -511,7 +511,7 @@ GET    /api/health               # Health check endpoint
 | Authentication | ✅ | ✅ |
 | Two-Factor Auth | ✅ | ✅ |
 | Priority Support | ❌ | ✅ |
-| Price | $0/month | $9.99/month |
+| Price | $0/month | $4.99/month |
 
 ---
 
@@ -598,17 +598,6 @@ Contributions are welcome! Please follow these guidelines:
 
 ---
 
-## 📄 License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-See [ATTRIBUTIONS.md](ATTRIBUTIONS.md) for third-party libraries and resources used in this project.
-
----
 
 <div align="center">
 

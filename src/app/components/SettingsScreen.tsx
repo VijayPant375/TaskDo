@@ -27,7 +27,7 @@ function formatDate(value?: string) {
 
 export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: SettingsScreenProps) {
   const { isPremium, subscriptionStatus } = useSubscription();
-  const { googleOAuthEnabled, isAuthenticated, signInWithGoogle, signOut, user } = useAuth();
+  const { isAuthenticated, signInWithGoogle, signOut, user } = useAuth();
   const renewalDate = formatDate(subscriptionStatus.currentPeriodEnd);
   const userInitial = user?.name?.charAt(0).toUpperCase() ?? 'T';
 
@@ -68,9 +68,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
                 <p className="mt-1 text-sm text-muted-foreground">
                   {isAuthenticated && user
                     ? 'Your account is active and TaskDo is syncing tasks from the backend.'
-                    : googleOAuthEnabled
-                      ? 'Sign in with Google to sync your tasks across devices.'
-                      : 'Google OAuth is scaffolded and waiting for the final API keys.'}
+                    : 'Sign in with Google to sync your tasks across devices.'}
                 </p>
               </div>
             </div>
@@ -87,12 +85,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
                 Sign out
               </Button>
             ) : (
-              <Button
-                className="w-full"
-                disabled={!googleOAuthEnabled}
-                onClick={signInWithGoogle}
-                variant="outline"
-              >
+              <Button className="w-full" onClick={signInWithGoogle} variant="outline">
                 Continue with Google
               </Button>
             )}

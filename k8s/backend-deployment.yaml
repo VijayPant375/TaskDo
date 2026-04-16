@@ -13,6 +13,7 @@ spec:
       labels:
         app: backend
     spec:
+      restartPolicy: Always
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

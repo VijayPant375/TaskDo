@@ -6,7 +6,6 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 
 interface AuthLandingScreenProps {
-  googleOAuthEnabled: boolean;
   isLoading: boolean;
   mfaChallengeEmail?: string | null;
   onCompleteMFA?: (token: string) => Promise<void>;
@@ -23,7 +22,6 @@ const featureList = [
 ];
 
 export function AuthLandingScreen({
-  googleOAuthEnabled,
   isLoading,
   mfaChallengeEmail,
   onCompleteMFA,
@@ -290,7 +288,7 @@ export function AuthLandingScreen({
 
             <Button
               className="mt-6 h-12 w-full rounded-2xl bg-[#111827] text-base text-white hover:bg-[#0f172a]"
-              disabled={!googleOAuthEnabled || isLoading || isSubmitting}
+              disabled={isLoading || isSubmitting}
               onClick={onContinueWithGoogle}
             >
               <svg aria-hidden="true" className="mr-3 h-5 w-5" viewBox="0 0 24 24">
@@ -316,12 +314,6 @@ export function AuthLandingScreen({
               </svg>
               Continue with Google
             </Button>
-
-            {!googleOAuthEnabled ? (
-              <p className="mt-3 text-sm text-amber-700 dark:text-amber-300">
-                Google OAuth is not configured for this environment yet.
-              </p>
-            ) : null}
 
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-border/70 bg-background/75 p-4">

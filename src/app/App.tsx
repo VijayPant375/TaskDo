@@ -23,7 +23,6 @@ function AppContent() {
   const {
     clearMfaChallenge,
     completeMfaChallenge,
-    googleOAuthEnabled,
     isAuthenticated,
     isLoading: isAuthLoading,
     loginWithPassword,
@@ -168,7 +167,6 @@ function AppContent() {
   if (!isAuthenticated) {
     return (
       <AuthLandingScreen
-        googleOAuthEnabled={googleOAuthEnabled}
         isLoading={isAuthLoading}
         mfaChallengeEmail={mfaChallengeEmail}
         onCompleteMFA={completeMfaChallenge}

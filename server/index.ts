@@ -85,7 +85,9 @@ const jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const googleRedirectUri =
-  process.env.GOOGLE_REDIRECT_URI ?? `http://localhost:${port}/api/auth/google/callback`;
+  process.env.GOOGLE_CALLBACK_URL ??
+  process.env.GOOGLE_REDIRECT_URI ??
+  `http://localhost:${port}/api/auth/google/callback`;
 const isGoogleOAuthConfigured = Boolean(googleClientId && googleClientSecret);
 const secureCookies = process.env.NODE_ENV === 'production';
 const accessTokenLifetimeSeconds = 60 * 15;
