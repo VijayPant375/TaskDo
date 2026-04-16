@@ -430,9 +430,12 @@ export function upsertGoogleUser(input: {
 }
 
 export function upsertLocalUser(input: {
+  avatarUrl?: string | null;
   email: string;
   id: string;
   name: string;
+  provider?: 'local' | 'google';
+  providerAccountId?: string;
 }) {
   return mutateDatabase((database) => {
     const now = new Date().toISOString();
@@ -440,11 +443,12 @@ export function upsertLocalUser(input: {
       database.userById.get(input.id) ?? database.userByEmail.get(input.email.toLowerCase()) ?? null;
 
     if (existing) {
-      existing.avatarUrl = existing.avatarUrl ?? null;
+      existing.avatarUrl = input.avatarUrl ?? existing.avatarUrl ?? null;
       existing.email = input.email;
       existing.name = input.name;
-      existing.provider = existing.provider ?? 'local';
-      existing.providerAccountId = existing.providerAccountId || input.id;
+      existing.provider = input.provider ?? existing.provider ?? 'local';
+      existing.providerAccountId =
+        input.providerAccountId ?? (existing.providerAccountId || input.id);
       existing.updatedAt = now;
       updateIndexesOnWrite(database, 'user', existing);
       return existing;
@@ -452,12 +456,12 @@ export function upsertLocalUser(input: {
 
     const created: StoredUser = {
       id: input.id,
-      avatarUrl: null,
+      avatarUrl: input.avatarUrl ?? null,
       createdAt: now,
       email: input.email,
       name: input.name,
-      provider: 'local',
-      providerAccountId: input.id,
+      provider: input.provider ?? 'local',
+      providerAccountId: input.providerAccountId ?? input.id,
       updatedAt: now,
     };
 

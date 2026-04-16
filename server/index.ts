@@ -45,7 +45,6 @@ import {
   updateSessionRefreshToken,
   updateTaskForUser,
   upsertLocalUser,
-  upsertGoogleUser,
   upsertSubscriptionForUser,
 } from './lib/store.js';
 import {
@@ -77,6 +76,7 @@ if (!configuredRedisUrl) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? '0.0.0.0';
 const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:5173';
@@ -89,7 +89,13 @@ const googleRedirectUri =
   process.env.GOOGLE_REDIRECT_URI ??
   `http://localhost:${port}/api/auth/google/callback`;
 const isGoogleOAuthConfigured = Boolean(googleClientId && googleClientSecret);
-const secureCookies = process.env.NODE_ENV === 'production';
+const cookieSecure = process.env.COOKIE_SECURE?.trim().toLowerCase();
+const secureCookies =
+  cookieSecure === 'true'
+    ? true
+    : cookieSecure === 'false'
+      ? false
+      : new URL(frontendUrl).protocol === 'https:';
 const accessTokenLifetimeSeconds = 60 * 15;
 const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -547,7 +553,7 @@ app.get('/api/auth/session', async (request, response) => {
   });
 });
 
-app.get('/api/auth/google/start', async (request, response) => {
+async function startGoogleAuth(request: Request, response: Response) {
   if (!isGoogleOAuthConfigured) {
     response.status(503).send('Google OAuth is not configured yet.');
     return;
@@ -583,7 +589,10 @@ app.get('/api/auth/google/start', async (request, response) => {
   googleUrl.searchParams.set('prompt', 'consent');
 
   response.redirect(googleUrl.toString());
-});
+}
+
+app.get('/api/auth/google', startGoogleAuth);
+app.get('/api/auth/google/start', startGoogleAuth);
 
 app.get('/api/auth/google/callback', async (request, response) => {
   if (!isGoogleOAuthConfigured) {
@@ -612,13 +621,6 @@ app.get('/api/auth/google/callback', async (request, response) => {
       return;
     }
 
-    const sessionUser = upsertGoogleUser({
-      avatarUrl: profile.picture ?? null,
-      email: profile.email,
-      name: profile.name,
-      providerAccountId: profile.sub,
-    });
-
     let mongoUser = await User.findOne({ email: profile.email.toLowerCase() });
 
     if (!mongoUser) {
@@ -633,9 +635,12 @@ app.get('/api/auth/google/callback', async (request, response) => {
     }
 
     const localUser = upsertLocalUser({
+      avatarUrl: profile.picture ?? null,
       email: mongoUser.email,
       id: mongoUser._id.toString(),
       name: mongoUser.username,
+      provider: 'google',
+      providerAccountId: profile.sub,
     });
 
     const token = createAuthToken(localUser.id);
@@ -643,13 +648,19 @@ app.get('/api/auth/google/callback', async (request, response) => {
     const session = await createSession({
       expiresAt: new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString(),
       refreshTokenHash: 'pending',
-      userId: sessionUser.id,
+      userId: localUser.id,
     });
 
-    await setSessionCookies(response, sessionUser.id, session.id);
+    await setSessionCookies(response, localUser.id, session.id);
 
     const redirectUrl = new URL(oauthState.returnTo, frontendUrl);
     redirectUrl.searchParams.set('token', token);
+    console.log('Google OAuth callback user:', {
+      email: localUser.email,
+      id: localUser.id,
+      returnTo: oauthState.returnTo,
+      sessionId: session.id,
+    });
     response.redirect(redirectUrl.toString());
   } catch (error) {
     console.error('Google OAuth callback failed.', error);

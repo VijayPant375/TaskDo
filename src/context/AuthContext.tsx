@@ -47,12 +47,12 @@ function clearStoredAuthentication() {
 }
 
 function redirectToApp() {
-  if (window.location.pathname !== '/app') {
-    window.location.assign('/app');
+  if (window.location.pathname !== '/dashboard') {
+    window.location.assign('/dashboard');
     return;
   }
 
-  window.history.replaceState({}, '', '/app');
+  window.history.replaceState({}, '', '/dashboard');
 }
 
 interface AuthContextValue {
@@ -84,6 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const url = new URL(window.location.href);
       const tokenFromRedirect = url.searchParams.get('token');
+      if (tokenFromRedirect) {
+        localStorage.setItem(authTokenStorageKey, tokenFromRedirect);
+      }
+
       const session = await fetchAuthSession();
 
       if (session.user) {
@@ -105,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (tokenFromRedirect) {
-        localStorage.setItem(authTokenStorageKey, tokenFromRedirect);
         url.searchParams.delete('token');
         window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
       }
@@ -177,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       refreshSession,
       signInWithGoogle: () => {
-        startGoogleSignIn('/app');
+        startGoogleSignIn('/dashboard');
       },
       signUpWithPassword: async (credentials) => {
         const response = await signupRequest(credentials);

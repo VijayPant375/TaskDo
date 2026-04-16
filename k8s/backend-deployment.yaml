@@ -4,7 +4,7 @@ metadata:
   name: backend
   namespace: taskdo
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: backend
@@ -19,7 +19,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: backend
-          image: taskdo-backend:v2
+          image: taskdo-backend:v3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
