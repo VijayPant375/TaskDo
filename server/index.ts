@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
-import { createAuthToken } from './controllers/authController.js';
+import { createAuthToken, createMfaChallengeToken } from './controllers/authController.js';
 import { connectDB } from './lib/db.js';
 import { getBearerUserId } from './middleware/auth.js';
 import { User } from './models/User.js';
@@ -18,7 +18,6 @@ import {
   clearAuthCookies,
   parseCookies,
   refreshCookieName,
-  setAuthCookies,
 } from './lib/cookies.js';
 import {
   cacheSubscription,
@@ -29,7 +28,6 @@ import {
 import {
   consumeOAuthState,
   countActiveTasksByUser,
-  createSession,
   createTaskForUser,
   deleteSession,
   deleteTaskForUser,
@@ -50,12 +48,14 @@ import {
 import {
   createCodeChallenge,
   createCodeVerifier,
-  createOpaqueToken,
   hashToken,
-  signJwt,
   verifyJwt,
 } from './lib/tokens.js';
 import { getRequiredEnv } from './lib/env.js';
+import {
+  createAuthenticatedBrowserSession,
+  rotateAuthenticatedBrowserSession,
+} from './lib/browserAuth.js';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const serverDirectory = path.dirname(currentFilePath);
@@ -96,8 +96,6 @@ const secureCookies =
     : cookieSecure === 'false'
       ? false
       : new URL(frontendUrl).protocol === 'https:';
-const accessTokenLifetimeSeconds = 60 * 15;
-const refreshTokenLifetimeSeconds = 60 * 60 * 24 * 14;
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const frontendDistDirectory = path.resolve(serverDirectory, '..', '..', 'dist');
@@ -171,34 +169,6 @@ function getSubscriptionPayload(subscription: Stripe.Subscription) {
   };
 }
 
-function createAccessToken(userId: string) {
-  return signJwt({ sub: userId, type: 'access' }, jwtAccessSecret, accessTokenLifetimeSeconds);
-}
-
-function createRefreshToken(userId: string, sessionId: string) {
-  return `${createOpaqueToken()}.${signJwt(
-    { sid: sessionId, sub: userId, type: 'refresh' },
-    jwtRefreshSecret,
-    refreshTokenLifetimeSeconds
-  )}`;
-}
-
-async function setSessionCookies(response: Response, userId: string, sessionId: string) {
-  const accessToken = createAccessToken(userId);
-  const refreshToken = createRefreshToken(userId, sessionId);
-  const refreshTokenHash = hashToken(refreshToken, jwtRefreshSecret);
-  const refreshExpiresAt = new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString();
-
-  await updateSessionRefreshToken(sessionId, refreshTokenHash, refreshExpiresAt);
-  setAuthCookies(response, {
-    accessToken,
-    accessTokenMaxAgeSeconds: accessTokenLifetimeSeconds,
-    refreshToken,
-    refreshTokenMaxAgeSeconds: refreshTokenLifetimeSeconds,
-    secureCookies,
-  });
-}
-
 function getAuthenticatedUserFromRequest(request: Request) {
   const bearerUserId = getBearerUserId(request);
 
@@ -214,7 +184,12 @@ function getAuthenticatedUserFromRequest(request: Request) {
   }
 
   const payload = verifyJwt(token, jwtAccessSecret);
-  if (!payload || payload.type !== 'access' || typeof payload.sub !== 'string') {
+  if (
+    !payload ||
+    payload.type !== 'access' ||
+    typeof payload.sub !== 'string' ||
+    payload.mfaVerified !== true
+  ) {
     return null;
   }
 
@@ -621,16 +596,27 @@ app.get('/api/auth/google/callback', async (request, response) => {
       return;
     }
 
-    let mongoUser = await User.findOne({ email: profile.email.toLowerCase() });
+    const normalizedEmail = profile.email.toLowerCase();
+    let mongoUser = await User.findOne({ googleId: profile.sub });
+
+    if (!mongoUser) {
+      mongoUser = await User.findOne({ email: normalizedEmail });
+    }
 
     if (!mongoUser) {
       mongoUser = await User.create({
-        email: profile.email.toLowerCase(),
+        email: normalizedEmail,
         googleId: profile.sub,
+        isOAuthUser: true,
+        mfaEnabled: false,
+        name: profile.name,
         username: await generateUniqueGoogleUsername(profile.email),
       });
-    } else if (mongoUser.googleId !== profile.sub) {
+    } else {
+      mongoUser.email = normalizedEmail;
       mongoUser.googleId = profile.sub;
+      mongoUser.isOAuthUser = true;
+      mongoUser.name = profile.name;
       await mongoUser.save();
     }
 
@@ -643,23 +629,22 @@ app.get('/api/auth/google/callback', async (request, response) => {
       providerAccountId: profile.sub,
     });
 
-    const token = createAuthToken(localUser.id);
-
-    const session = await createSession({
-      expiresAt: new Date(Date.now() + refreshTokenLifetimeSeconds * 1000).toISOString(),
-      refreshTokenHash: 'pending',
-      userId: localUser.id,
-    });
-
-    await setSessionCookies(response, localUser.id, session.id);
-
     const redirectUrl = new URL(oauthState.returnTo, frontendUrl);
-    redirectUrl.searchParams.set('token', token);
+    if (mongoUser.mfaEnabled) {
+      redirectUrl.searchParams.set('email', localUser.email);
+      redirectUrl.searchParams.set('mfa', 'required');
+      redirectUrl.searchParams.set('mfaToken', createMfaChallengeToken(localUser.id));
+      response.redirect(redirectUrl.toString());
+      return;
+    }
+
+    await createAuthenticatedBrowserSession(response, localUser.id);
+    redirectUrl.searchParams.set('token', createAuthToken(localUser.id));
     console.log('Google OAuth callback user:', {
       email: localUser.email,
       id: localUser.id,
       returnTo: oauthState.returnTo,
-      sessionId: session.id,
+      mfaEnabled: Boolean(mongoUser.mfaEnabled),
     });
     response.redirect(redirectUrl.toString());
   } catch (error) {
@@ -699,13 +684,11 @@ app.post('/api/auth/refresh', async (request, response) => {
 
   const session = await getSessionById(payload.sid);
   const user = getUserById(payload.sub);
-  const expectedHash = hashToken(refreshToken, jwtRefreshSecret);
-
   if (
     !session ||
     !user ||
     session.userId !== user.id ||
-    session.refreshTokenHash !== expectedHash ||
+    session.refreshTokenHash !== hashToken(refreshToken, jwtRefreshSecret) ||
     new Date(session.expiresAt).getTime() <= Date.now()
   ) {
     if (session) {
@@ -717,7 +700,11 @@ app.post('/api/auth/refresh', async (request, response) => {
     return;
   }
 
-  await setSessionCookies(response, user.id, session.id);
+  await rotateAuthenticatedBrowserSession(response, {
+    mfaVerified: Boolean(session.mfaVerified),
+    sessionId: session.id,
+    userId: user.id,
+  });
   response.json({ ok: true });
 });
 

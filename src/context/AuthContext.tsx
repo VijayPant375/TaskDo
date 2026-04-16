@@ -46,6 +46,14 @@ function clearStoredAuthentication() {
   localStorage.removeItem(authUserStorageKey);
 }
 
+function clearAuthRedirectParams(url: URL) {
+  url.searchParams.delete('email');
+  url.searchParams.delete('mfa');
+  url.searchParams.delete('mfaToken');
+  url.searchParams.delete('token');
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
+
 function redirectToApp() {
   if (window.location.pathname !== '/dashboard') {
     window.location.assign('/dashboard');
@@ -83,7 +91,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const url = new URL(window.location.href);
+      const mfaRequiredFromRedirect = url.searchParams.get('mfa') === 'required';
+      const emailFromRedirect = url.searchParams.get('email');
+      const mfaTokenFromRedirect = url.searchParams.get('mfaToken');
       const tokenFromRedirect = url.searchParams.get('token');
+
+      if (mfaRequiredFromRedirect && emailFromRedirect && mfaTokenFromRedirect) {
+        clearStoredAuthentication();
+        setUser(null);
+        setMfaChallengeEmail(emailFromRedirect);
+        setMfaChallengeToken(mfaTokenFromRedirect);
+        clearAuthRedirectParams(url);
+        return;
+      }
+
       if (tokenFromRedirect) {
         localStorage.setItem(authTokenStorageKey, tokenFromRedirect);
       }
@@ -92,35 +113,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (session.user) {
         setUser(session.user);
-        const storedToken = localStorage.getItem(authTokenStorageKey);
-        if (storedToken) {
-          storeAuthenticatedUser(storedToken, session.user);
-        }
         setMfaChallengeEmail(null);
         setMfaChallengeToken(null);
 
         if (tokenFromRedirect) {
           storeAuthenticatedUser(tokenFromRedirect, session.user);
-          url.searchParams.delete('token');
-          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+          clearAuthRedirectParams(url);
+        } else {
+          const storedToken = localStorage.getItem(authTokenStorageKey);
+          if (storedToken) {
+            storeAuthenticatedUser(storedToken, session.user);
+          }
         }
 
         return;
       }
 
+      clearStoredAuthentication();
+      setUser(null);
       if (tokenFromRedirect) {
-        url.searchParams.delete('token');
-        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+        clearAuthRedirectParams(url);
       }
-
-      const storedToken = localStorage.getItem(authTokenStorageKey);
-      const storedUser = readStoredUser();
-      setUser(storedToken && storedUser ? storedUser : null);
     } catch (error) {
       console.error('Failed to load auth session.', error);
-      const storedToken = localStorage.getItem(authTokenStorageKey);
-      const storedUser = readStoredUser();
-      setUser(storedToken && storedUser ? storedUser : null);
+      clearStoredAuthentication();
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

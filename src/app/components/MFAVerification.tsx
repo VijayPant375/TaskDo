@@ -1,7 +1,7 @@
 import { ArrowLeft, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from './ui/input-otp';
+import { CodeInput } from './CodeInput';
 
 interface MFAVerificationProps {
   email: string;
@@ -63,22 +63,7 @@ export function MFAVerification({
           ) : null}
 
           <div className="mt-8 flex justify-center">
-            <InputOTP
-              containerClassName="justify-center"
-              maxLength={6}
-              onChange={setToken}
-              pattern="^[0-9]+$"
-              value={token}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={1} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={2} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={3} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={4} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={5} className="h-12 w-12 text-base" />
-              </InputOTPGroup>
-            </InputOTP>
+            <CodeInput autoFocus disabled={isSubmitting} onChange={setToken} value={token} />
           </div>
 
           {error ? <p className="mt-4 text-center text-sm text-rose-500">{error}</p> : null}

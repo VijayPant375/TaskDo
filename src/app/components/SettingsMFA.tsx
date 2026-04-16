@@ -2,26 +2,35 @@ import { ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { disableMFA, enableMFA, setupMFA, verifyMFA, type MFASetupResponse } from '../../services/mfa';
+import { CodeInput } from './CodeInput';
 import { MFASetup } from './MFASetup';
 import { Button } from './ui/button';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from './ui/input-otp';
+
+type MfaMode = 'idle' | 'setup' | 'verify' | 'disable';
 
 export function SettingsMFA() {
   const { refreshSession, user } = useAuth();
+  const [mode, setMode] = useState<MfaMode>('idle');
   const [setupData, setSetupData] = useState<MFASetupResponse | null>(null);
-  const [verifyToken, setVerifyToken] = useState('');
-  const [disableToken, setDisableToken] = useState('');
+  const [verifyCode, setVerifyCode] = useState(['', '', '', '', '', '']);
+  const [disableCode, setDisableCode] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSettingUp, setIsSettingUp] = useState(false);
   const [isEnabling, setIsEnabling] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isDisabling, setIsDisabling] = useState(false);
-  const status = setupData ? 'disabled' : user?.mfaEnabled ? 'enabled' : 'disabled';
+  const status = user?.mfaEnabled ? 'enabled' : 'disabled';
+  const verifyToken = verifyCode.join('');
+  const disableToken = disableCode.join('');
 
   const clearMessages = () => {
     setError('');
     setSuccess('');
+  };
+
+  const resetCode = (setter: (next: string[]) => void) => {
+    setter(['', '', '', '', '', '']);
   };
 
   const handleStartSetup = async () => {
@@ -30,9 +39,10 @@ export function SettingsMFA() {
 
     try {
       const response = await setupMFA();
-      setVerifyToken('');
-      setDisableToken('');
       setSetupData(response);
+      resetCode(setVerifyCode);
+      resetCode(setDisableCode);
+      setMode('setup');
     } catch (setupError) {
       setError(setupError instanceof Error ? setupError.message : 'Unable to start MFA setup.');
     } finally {
@@ -48,8 +58,9 @@ export function SettingsMFA() {
       await enableMFA(token);
       await refreshSession();
       setSetupData(null);
-      setVerifyToken('');
-      setDisableToken('');
+      resetCode(setVerifyCode);
+      resetCode(setDisableCode);
+      setMode('idle');
       setSuccess('MFA is now enabled for your account.');
     } catch (enableError) {
       setError(enableError instanceof Error ? enableError.message : 'Unable to enable MFA.');
@@ -68,7 +79,8 @@ export function SettingsMFA() {
 
     try {
       await verifyMFA(verifyToken);
-      setVerifyToken('');
+      resetCode(setVerifyCode);
+      setMode('idle');
       setSuccess('Authenticator code verified successfully.');
     } catch (verifyError) {
       setError(verifyError instanceof Error ? verifyError.message : 'Unable to verify code.');
@@ -88,9 +100,10 @@ export function SettingsMFA() {
     try {
       await disableMFA(disableToken);
       await refreshSession();
-      setDisableToken('');
-      setVerifyToken('');
+      resetCode(setDisableCode);
+      resetCode(setVerifyCode);
       setSetupData(null);
+      setMode('idle');
       setSuccess('MFA has been disabled.');
     } catch (disableError) {
       setError(disableError instanceof Error ? disableError.message : 'Unable to disable MFA.');
@@ -98,6 +111,117 @@ export function SettingsMFA() {
       setIsDisabling(false);
     }
   };
+
+  const renderIdleState = () => {
+    if (!user?.mfaEnabled) {
+      return (
+        <div className="space-y-4">
+          <div className="rounded-2xl border bg-muted/30 p-4">
+            <p className="text-sm font-medium">Set up MFA</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Start by generating a QR code, then verify the first 6-digit code from your authenticator app.
+            </p>
+          </div>
+          <Button
+            className="bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
+            disabled={isSettingUp}
+            onClick={() => void handleStartSetup()}
+          >
+            {isSettingUp ? 'Preparing setup...' : 'Enable MFA'}
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Button onClick={() => {
+          clearMessages();
+          resetCode(setVerifyCode);
+          setMode('verify');
+        }} variant="outline">
+          Verify current code
+        </Button>
+        <Button onClick={() => {
+          clearMessages();
+          resetCode(setDisableCode);
+          setMode('disable');
+        }} variant="outline">
+          Disable MFA
+        </Button>
+      </div>
+    );
+  };
+
+  const renderVerifyState = () => (
+    <div className="rounded-2xl border bg-muted/30 p-4">
+      <p className="text-sm font-medium">Verify a current code</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Confirm your authenticator app is working before you leave settings.
+      </p>
+      <div className="mt-4">
+        <CodeInput
+          disabled={isVerifying}
+          onChange={(value) => setVerifyCode(Array.from({ length: 6 }, (_, index) => value[index] ?? ''))}
+          value={verifyToken}
+        />
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <Button
+          disabled={isVerifying || verifyToken.length !== 6}
+          onClick={() => void handleVerify()}
+          variant="outline"
+        >
+          Verify code
+        </Button>
+        <Button
+          onClick={() => {
+            resetCode(setVerifyCode);
+            clearMessages();
+            setMode('idle');
+          }}
+          variant="ghost"
+        >
+          Back
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderDisableState = () => (
+    <div className="rounded-2xl border bg-muted/30 p-4">
+      <p className="text-sm font-medium">Disable MFA</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Enter a valid 6-digit code from your authenticator app to turn MFA off.
+      </p>
+      <div className="mt-4">
+        <CodeInput
+          disabled={isDisabling}
+          onChange={(value) => setDisableCode(Array.from({ length: 6 }, (_, index) => value[index] ?? ''))}
+          value={disableToken}
+        />
+      </div>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <Button
+          disabled={isDisabling || disableToken.length !== 6}
+          onClick={() => void handleDisable()}
+          variant="outline"
+        >
+          Disable MFA
+        </Button>
+        <Button
+          onClick={() => {
+            resetCode(setDisableCode);
+            clearMessages();
+            setMode('idle');
+          }}
+          variant="ghost"
+        >
+          Back
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <section className="rounded-3xl border bg-card p-5 sm:p-6">
@@ -118,13 +242,16 @@ export function SettingsMFA() {
         </div>
       </div>
 
-      {setupData ? (
+      {mode === 'setup' && setupData ? (
         <div className="mb-5">
           <MFASetup
             error={error}
             isSubmitting={isEnabling}
             onCancel={() => {
+              setMode('idle');
               setSetupData(null);
+              resetCode(setVerifyCode);
+              resetCode(setDisableCode);
               clearMessages();
             }}
             onEnable={handleEnable}
@@ -134,85 +261,9 @@ export function SettingsMFA() {
         </div>
       ) : null}
 
-      {!setupData ? (
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button
-            className="bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600"
-            disabled={isSettingUp || Boolean(user?.mfaEnabled)}
-            onClick={() => void handleStartSetup()}
-          >
-            {isSettingUp ? 'Preparing setup...' : user?.mfaEnabled ? 'MFA is enabled' : 'Set up MFA'}
-          </Button>
-        </div>
-      ) : null}
-
-      <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <div className="rounded-2xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium">Verify a current code</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Use this after setup to confirm your authenticator app is working.
-          </p>
-          <div className="mt-4">
-            <InputOTP
-              containerClassName="justify-start"
-              maxLength={6}
-              onChange={setVerifyToken}
-              pattern="^[0-9]+$"
-              value={verifyToken}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-          </div>
-          <Button
-            className="mt-4"
-            disabled={isVerifying || verifyToken.length !== 6 || !user?.mfaEnabled}
-            onClick={() => void handleVerify()}
-            variant="outline"
-          >
-            Verify code
-          </Button>
-        </div>
-
-        <div className="rounded-2xl border bg-muted/30 p-4">
-          <p className="text-sm font-medium">Disable MFA</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter a valid code from your authenticator app to turn MFA off.
-          </p>
-          <div className="mt-4">
-            <InputOTP
-              containerClassName="justify-start"
-              maxLength={6}
-              onChange={setDisableToken}
-              pattern="^[0-9]+$"
-              value={disableToken}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-          </div>
-          <Button
-            className="mt-4"
-            disabled={isDisabling || disableToken.length !== 6 || !user?.mfaEnabled}
-            onClick={() => void handleDisable()}
-            variant="outline"
-          >
-            Disable MFA
-          </Button>
-        </div>
-      </div>
+      {mode === 'idle' ? renderIdleState() : null}
+      {mode === 'verify' ? renderVerifyState() : null}
+      {mode === 'disable' ? renderDisableState() : null}
 
       {!user?.mfaEnabled && !setupData ? (
         <p className="mt-4 text-sm text-muted-foreground">

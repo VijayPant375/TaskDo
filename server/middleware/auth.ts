@@ -35,8 +35,22 @@ export function getBearerUserId(request: Request) {
   }
 
   try {
-    const payload = jwt.verify(token, getRequiredEnv('JWT_ACCESS_SECRET')) as { id?: string };
-    return typeof payload.id === 'string' ? payload.id : null;
+    const payload = jwt.verify(token, getRequiredEnv('JWT_ACCESS_SECRET')) as {
+      id?: string;
+      mfaVerified?: boolean;
+      sub?: string;
+      type?: string;
+    };
+
+    if (
+      payload.type === 'access' &&
+      payload.mfaVerified === true &&
+      typeof payload.sub === 'string'
+    ) {
+      return payload.sub;
+    }
+
+    return null;
   } catch {
     return null;
   }

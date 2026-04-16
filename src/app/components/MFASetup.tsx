@@ -1,7 +1,7 @@
 import { LoaderCircle, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from './ui/button';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from './ui/input-otp';
+import { CodeInput } from './CodeInput';
 
 interface MFASetupProps {
   error?: string;
@@ -59,22 +59,7 @@ export function MFASetup({
 
           <div>
             <p className="mb-3 text-sm font-medium">Authenticator code</p>
-            <InputOTP
-              containerClassName="justify-start"
-              maxLength={6}
-              onChange={setToken}
-              pattern="^[0-9]+$"
-              value={token}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={1} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={2} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={3} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={4} className="h-12 w-12 text-base" />
-                <InputOTPSlot index={5} className="h-12 w-12 text-base" />
-              </InputOTPGroup>
-            </InputOTP>
+            <CodeInput autoFocus disabled={isSubmitting} onChange={setToken} value={token} />
           </div>
 
           {error ? <p className="text-sm text-rose-500">{error}</p> : null}

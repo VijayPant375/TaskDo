@@ -43,6 +43,8 @@ export interface StoredUser {
 export interface StoredSession {
   id: string;
   userId: string;
+  mfaVerified: boolean;
+  tempMfaSecret: string | null;
   refreshTokenHash: string;
   expiresAt: string;
   createdAt: string;
@@ -527,7 +529,9 @@ export async function pruneExpiredOAuthStates() {
 
 export async function createSession(input: {
   expiresAt: string;
+  mfaVerified?: boolean;
   refreshTokenHash: string;
+  tempMfaSecret?: string | null;
   userId: string;
 }) {
   const session = mutateDatabase((database) => {
@@ -537,6 +541,8 @@ export async function createSession(input: {
       createdAt: now,
       expiresAt: input.expiresAt,
       lastUsedAt: now,
+      mfaVerified: input.mfaVerified ?? false,
+      tempMfaSecret: input.tempMfaSecret ?? null,
       refreshTokenHash: input.refreshTokenHash,
       userId: input.userId,
     };
@@ -565,7 +571,8 @@ export async function getSessionById(sessionId: string) {
 export async function updateSessionRefreshToken(
   sessionId: string,
   refreshTokenHash: string,
-  expiresAt: string
+  expiresAt: string,
+  mfaVerified?: boolean
 ) {
   const session = mutateDatabase((database) => {
     const session = database.sessions.find((item) => item.id === sessionId);
@@ -575,6 +582,9 @@ export async function updateSessionRefreshToken(
 
     session.refreshTokenHash = refreshTokenHash;
     session.expiresAt = expiresAt;
+    if (typeof mfaVerified === 'boolean') {
+      session.mfaVerified = mfaVerified;
+    }
     session.lastUsedAt = new Date().toISOString();
     return session;
   });
@@ -582,6 +592,38 @@ export async function updateSessionRefreshToken(
   if (session) {
     await setRedisSession(session);
   }
+}
+
+export async function updateSessionMfaState(
+  sessionId: string,
+  input: {
+    mfaVerified?: boolean;
+    tempMfaSecret?: string | null;
+  }
+) {
+  const session = mutateDatabase((database) => {
+    const existingSession = database.sessions.find((item) => item.id === sessionId);
+    if (!existingSession) {
+      return null;
+    }
+
+    if (typeof input.mfaVerified === 'boolean') {
+      existingSession.mfaVerified = input.mfaVerified;
+    }
+
+    if ('tempMfaSecret' in input) {
+      existingSession.tempMfaSecret = input.tempMfaSecret ?? null;
+    }
+
+    existingSession.lastUsedAt = new Date().toISOString();
+    return existingSession;
+  });
+
+  if (session) {
+    await setRedisSession(session);
+  }
+
+  return session;
 }
 
 export async function deleteSession(sessionId: string) {

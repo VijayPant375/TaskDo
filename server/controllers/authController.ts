@@ -5,6 +5,7 @@ import { upsertLocalUser } from '../lib/store.js';
 import { verifyMfaToken } from '../lib/mfa.js';
 import { User } from '../models/User.js';
 import { getRequiredEnv } from '../lib/env.js';
+import { createAuthenticatedBrowserSession } from '../lib/browserAuth.js';
 
 function getJwtSecret() {
   return getRequiredEnv('JWT_ACCESS_SECRET');
@@ -18,7 +19,7 @@ export function createAuthToken(userId: string) {
   return jwt.sign({ id: userId }, getJwtSecret());
 }
 
-function createMfaChallengeToken(userId: string) {
+export function createMfaChallengeToken(userId: string) {
   return jwt.sign({ purpose: 'mfa-login', sub: userId }, getJwtSecret(), {
     expiresIn: '10m',
   });
@@ -91,6 +92,7 @@ export async function signup(request: Request, response: Response) {
       username,
     });
 
+    await createAuthenticatedBrowserSession(response, user._id.toString());
     response.json(serializeAuthResponse(user));
   } catch (error) {
     response.status(500).json({ error: getErrorMessage(error) });
@@ -123,6 +125,7 @@ export async function login(request: Request, response: Response) {
       return;
     }
 
+    await createAuthenticatedBrowserSession(response, user._id.toString());
     response.json(serializeAuthResponse(user));
   } catch (error) {
     response.status(500).json({ error: getErrorMessage(error) });
@@ -153,6 +156,7 @@ export async function verifyLoginMfa(request: Request, response: Response) {
       return;
     }
 
+    await createAuthenticatedBrowserSession(response, user._id.toString());
     response.json({
       token: createAuthToken(user._id.toString()),
       user: {
