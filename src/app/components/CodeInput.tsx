@@ -41,9 +41,18 @@ export function CodeInput({
     refs.current[index]?.select();
   };
 
+  const handleChange = (inputVal: string, index: number) => {
+    if (!/^[0-9]?$/.test(inputVal)) return;
+    
+    onChange(inputVal, index);
+    if (inputVal) {
+      focusInput(index + 1);
+    }
+  };
+
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      {Array.from({ length }).map((_, index) => (
+      {value.map((digit, index) => (
         <input
           key={index}
           ref={(element) => {
@@ -57,13 +66,7 @@ export function CodeInput({
           disabled={disabled}
           inputMode="numeric"
           maxLength={1}
-          onChange={(event) => {
-            const input = event.target.value.replace(/\D/g, '').slice(0, 1);
-            onChange(input, index);
-            if (input) {
-              focusInput(index + 1);
-            }
-          }}
+          onChange={(event) => handleChange(event.target.value, index)}
           onKeyDown={(event) => {
             if (event.key === 'Backspace' && !value[index]) {
               event.preventDefault();
@@ -97,7 +100,7 @@ export function CodeInput({
           }}
           onFocus={(event) => event.target.select()}
           type="text"
-          value={value[index] || ''}
+          value={digit}
         />
       ))}
     </div>

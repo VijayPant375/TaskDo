@@ -868,9 +868,15 @@ app.post('/api/create-checkout-session', requireAuth, async (request: Authentica
     }
 
     const storedSubscription = getSubscriptionByUserId(user.id);
+
+    if (!process.env.STRIPE_PRICE_ID) {
+      response.status(500).json({ error: "Stripe price ID missing" });
+      return;
+    }
+
     const priceId =
       billingPeriod === 'monthly'
-        ? (process.env.STRIPE_MONTHLY_PRICE_ID as string)
+        ? (process.env.STRIPE_PRICE_ID as string)
         : (process.env.STRIPE_YEARLY_PRICE_ID as string);
 
     const session = await stripe!.checkout.sessions.create({
@@ -997,6 +1003,7 @@ app.get('*', (request, response, next) => {
 });
 
 async function startServer() {
+  console.log("STRIPE PRICE:", process.env.STRIPE_PRICE_ID);
   await connectDB();
 
   app.listen(port, host, () => {

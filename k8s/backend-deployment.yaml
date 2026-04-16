@@ -19,7 +19,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: backend
-          image: taskdo-backend:v3
+          image: taskdo-backend:v7
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
@@ -28,6 +28,17 @@ spec:
                 name: taskdo-config
             - secretRef:
                 name: taskdo-secrets
+          env:
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secret
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_PRICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secret
+                  key: STRIPE_PRICE_ID
           readinessProbe:
             httpGet:
               path: /api/health
