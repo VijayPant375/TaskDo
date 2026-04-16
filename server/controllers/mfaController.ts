@@ -207,6 +207,7 @@ export async function disableMFA(request: MfaRequest, response: Response) {
     const session = await getAuthenticatedSession(request);
     if (session && session.userId === userId) {
       await updateSessionMfaState(session.id, {
+        mfaVerified: false,
         tempMfaSecret: null,
       });
     }

@@ -20,7 +20,17 @@ export function MFASetup({
   qrCodeDataUrl,
   secret,
 }: MFASetupProps) {
-  const [token, setToken] = useState('');
+  const [code, setCode] = useState<string[]>(['', '', '', '', '', '']);
+  const token = code.join('');
+
+  const handleChange = (val: string, i: number) => {
+    const updated = [...code];
+    updated[i] = val;
+    setCode(updated);
+  };
+  const handlePaste = (val: string) => {
+    setCode(Array.from({ length: 6 }, (_, index) => val[index] ?? ''));
+  };
 
   const handleEnable = async () => {
     if (token.length !== 6 || isSubmitting) {
@@ -59,7 +69,7 @@ export function MFASetup({
 
           <div>
             <p className="mb-3 text-sm font-medium">Authenticator code</p>
-            <CodeInput autoFocus disabled={isSubmitting} onChange={setToken} value={token} />
+            <CodeInput autoFocus disabled={isSubmitting} onChange={handleChange} onPaste={handlePaste} value={code} />
           </div>
 
           {error ? <p className="text-sm text-rose-500">{error}</p> : null}

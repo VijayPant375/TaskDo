@@ -44,13 +44,12 @@ function verifyMfaChallengeToken(token: string) {
 function serializeAuthResponse(user: {
   email: string;
   mfaEnabled?: boolean;
-  username: string;
   _id: { toString(): string };
 }) {
   const authUser = upsertLocalUser({
     email: user.email,
     id: user._id.toString(),
-    name: user.username,
+    name: user.email.split('@')[0],
   });
 
   const token = createAuthToken(authUser.id);
@@ -61,7 +60,7 @@ function serializeAuthResponse(user: {
       email: user.email,
       id: authUser.id,
       mfaEnabled: Boolean(user.mfaEnabled),
-      username: user.username,
+      username: user.email.split('@')[0],
     },
   };
 }
@@ -69,17 +68,14 @@ function serializeAuthResponse(user: {
 export async function signup(request: Request, response: Response) {
   try {
     const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : '';
-    const username = typeof request.body.username === 'string' ? request.body.username.trim() : '';
     const password = typeof request.body.password === 'string' ? request.body.password : '';
 
-    if (!email || !username || !password) {
-      response.status(400).json({ error: 'Email, username, and password are required' });
+    if (!email || !password) {
+      response.status(400).json({ error: 'Email and password are required' });
       return;
     }
 
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }],
-    });
+    const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       response.status(400).json({ error: 'User already exists' });
@@ -89,7 +85,6 @@ export async function signup(request: Request, response: Response) {
     const user = await User.create({
       email,
       password: await bcrypt.hash(password, 10),
-      username,
     });
 
     await createAuthenticatedBrowserSession(response, user._id.toString());
@@ -163,7 +158,7 @@ export async function verifyLoginMfa(request: Request, response: Response) {
         email: user.email,
         id: user._id.toString(),
         mfaEnabled: true,
-        username: user.username,
+        username: user.email.split('@')[0],
       },
     });
   } catch (error) {

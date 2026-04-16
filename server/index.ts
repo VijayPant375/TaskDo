@@ -187,8 +187,7 @@ function getAuthenticatedUserFromRequest(request: Request) {
   if (
     !payload ||
     payload.type !== 'access' ||
-    typeof payload.sub !== 'string' ||
-    payload.mfaVerified !== true
+    typeof payload.sub !== 'string'
   ) {
     return null;
   }
@@ -428,8 +427,23 @@ function requireAuth(request: AuthenticatedRequest, response: Response, next: Ne
     return;
   }
 
-  request.authUser = { id: user.id };
-  next();
+  // Auth requirement enforces MFA
+  const cookies = parseCookies(request.headers.cookie);
+  const token = cookies[accessCookieName];
+  const payload = token ? verifyJwt(token, jwtAccessSecret) : null;
+  const isMfaVerified = payload?.mfaVerified === true;
+
+  User.findById(user.id).then(mongoUser => {
+    if (mongoUser?.mfaEnabled && !isMfaVerified) {
+      response.status(401).json({ mfaRequired: true });
+      return;
+    }
+
+    request.authUser = { id: user.id };
+    next();
+  }).catch(() => {
+    response.status(500).json({ error: 'Internal Server Error' });
+  });
 }
 
 const authLimiter = rateLimit({
@@ -575,59 +589,54 @@ app.get('/api/auth/google/callback', async (request, response) => {
     return;
   }
 
-  const code = typeof request.query.code === 'string' ? request.query.code : null;
-  const state = typeof request.query.state === 'string' ? request.query.state : null;
+    const code = typeof request.query.code === 'string' ? request.query.code : null;
+    const state = typeof request.query.state === 'string' ? request.query.state : null;
 
-  if (!code || !state) {
-    response.status(400).send('Missing OAuth callback parameters.');
-    return;
-  }
-
-  const oauthState = await consumeOAuthState(state);
-  if (!oauthState || new Date(oauthState.expiresAt).getTime() <= Date.now()) {
-    response.status(400).send('OAuth state is invalid or expired.');
-    return;
-  }
-
-  try {
-    const profile = await exchangeGoogleCodeForProfile(code, oauthState.codeVerifier);
-    if (!profile.sub || !profile.email || !profile.name) {
-      response.status(400).send('Google profile is incomplete.');
+    if (!code || !state) {
+      response.status(400).send('Missing OAuth callback parameters.');
       return;
     }
 
-    const normalizedEmail = profile.email.toLowerCase();
-    let mongoUser = await User.findOne({ googleId: profile.sub });
-
-    if (!mongoUser) {
-      mongoUser = await User.findOne({ email: normalizedEmail });
+    const oauthState = await consumeOAuthState(state);
+    if (!oauthState || new Date(oauthState.expiresAt).getTime() <= Date.now()) {
+      response.status(400).send('OAuth state is invalid or expired.');
+      return;
     }
 
-    if (!mongoUser) {
-      mongoUser = await User.create({
-        email: normalizedEmail,
-        googleId: profile.sub,
-        isOAuthUser: true,
-        mfaEnabled: false,
+    try {
+      const profileInfo = await exchangeGoogleCodeForProfile(code, oauthState.codeVerifier);
+      // profile.id or profile.sub for the user id
+      const profile = {
+        id: (profileInfo as any).id || profileInfo.sub,
+        email: profileInfo.email,
+        name: profileInfo.name
+      };
+
+      if (!profile.id || !profile.email || !profile.name) {
+        response.status(400).send('Google profile is incomplete.');
+        return;
+      }
+
+      const normalizedEmail = profile.email.toLowerCase();
+      let mongoUser = await User.findOne({ googleId: profile.id });
+
+      if (!mongoUser) {
+        mongoUser = await User.create({
+          googleId: profile.id,
+          email: normalizedEmail,
+          isOAuthUser: true,
+          mfaEnabled: false
+        });
+      }
+
+      const localUser = upsertLocalUser({
+        avatarUrl: null,
+        email: mongoUser.email,
+        id: mongoUser._id.toString(),
         name: profile.name,
-        username: await generateUniqueGoogleUsername(profile.email),
+        provider: 'google',
+        providerAccountId: profile.id,
       });
-    } else {
-      mongoUser.email = normalizedEmail;
-      mongoUser.googleId = profile.sub;
-      mongoUser.isOAuthUser = true;
-      mongoUser.name = profile.name;
-      await mongoUser.save();
-    }
-
-    const localUser = upsertLocalUser({
-      avatarUrl: profile.picture ?? null,
-      email: mongoUser.email,
-      id: mongoUser._id.toString(),
-      name: mongoUser.username,
-      provider: 'google',
-      providerAccountId: profile.sub,
-    });
 
     const redirectUrl = new URL(oauthState.returnTo, frontendUrl);
     if (mongoUser.mfaEnabled) {

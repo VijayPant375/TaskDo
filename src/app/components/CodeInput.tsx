@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { cn } from './ui/utils';
 
 interface CodeInputProps {
@@ -6,12 +6,9 @@ interface CodeInputProps {
   className?: string;
   disabled?: boolean;
   length?: number;
-  onChange: (value: string) => void;
-  value: string;
-}
-
-function normalizeDigits(value: string, length: number) {
-  return value.replace(/\D/g, '').slice(0, length);
+  onChange: (value: string, index: number) => void;
+  onPaste?: (value: string) => void;
+  value: string[];
 }
 
 export function CodeInput({
@@ -20,29 +17,20 @@ export function CodeInput({
   disabled = false,
   length = 6,
   onChange,
+  onPaste,
   value,
 }: CodeInputProps) {
   const refs = useRef<Array<HTMLInputElement | null>>([]);
-  const digits = useMemo(() => {
-    const normalized = normalizeDigits(value, length);
-    return Array.from({ length }, (_, index) => normalized[index] ?? '');
-  }, [length, value]);
 
   useEffect(() => {
     if (!autoFocus || disabled) {
       return;
     }
 
-    const firstEmptyIndex = digits.findIndex((digit) => !digit);
+    const firstEmptyIndex = value.findIndex((digit) => !digit);
     const targetIndex = firstEmptyIndex === -1 ? length - 1 : firstEmptyIndex;
     refs.current[targetIndex]?.focus();
-  }, [autoFocus, digits, disabled, length]);
-
-  const updateDigitAt = (index: number, nextDigit: string) => {
-    const nextDigits = [...digits];
-    nextDigits[index] = nextDigit;
-    onChange(nextDigits.join(''));
-  };
+  }, [autoFocus, disabled, length, value]);
 
   const focusInput = (index: number) => {
     if (index < 0 || index >= length) {
@@ -55,7 +43,7 @@ export function CodeInput({
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
-      {digits.map((digit, index) => (
+      {Array.from({ length }).map((_, index) => (
         <input
           key={index}
           ref={(element) => {
@@ -70,18 +58,17 @@ export function CodeInput({
           inputMode="numeric"
           maxLength={1}
           onChange={(event) => {
-            const input = normalizeDigits(event.target.value, 1);
-            updateDigitAt(index, input);
-
+            const input = event.target.value.replace(/\D/g, '').slice(0, 1);
+            onChange(input, index);
             if (input) {
               focusInput(index + 1);
             }
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Backspace' && !digits[index]) {
+            if (event.key === 'Backspace' && !value[index]) {
               event.preventDefault();
               if (index > 0) {
-                updateDigitAt(index - 1, '');
+                onChange('', index - 1);
               }
               focusInput(index - 1);
               return;
@@ -100,18 +87,17 @@ export function CodeInput({
           }}
           onPaste={(event) => {
             event.preventDefault();
-            const pasted = normalizeDigits(event.clipboardData.getData('text'), length);
-            if (!pasted) {
+            const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
+            if (!pasted || !onPaste) {
               return;
             }
-
-            onChange(pasted);
+            onPaste(pasted);
             const targetIndex = Math.min(pasted.length, length) - 1;
             focusInput(targetIndex < 0 ? 0 : targetIndex);
           }}
           onFocus={(event) => event.target.select()}
           type="text"
-          value={digit}
+          value={value[index] || ''}
         />
       ))}
     </div>

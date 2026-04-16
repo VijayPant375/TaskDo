@@ -20,7 +20,17 @@ export function MFAVerification({
   onBack,
   onSubmit,
 }: MFAVerificationProps) {
-  const [token, setToken] = useState('');
+  const [code, setCode] = useState<string[]>(['', '', '', '', '', '']);
+  const token = code.join('');
+
+  const handleChange = (val: string, i: number) => {
+    const updated = [...code];
+    updated[i] = val;
+    setCode(updated);
+  };
+  const handlePaste = (val: string) => {
+    setCode(Array.from({ length: 6 }, (_, index) => val[index] ?? ''));
+  };
 
   const handleSubmit = async () => {
     if (token.length !== 6 || isSubmitting) {
@@ -63,7 +73,7 @@ export function MFAVerification({
           ) : null}
 
           <div className="mt-8 flex justify-center">
-            <CodeInput autoFocus disabled={isSubmitting} onChange={setToken} value={token} />
+            <CodeInput autoFocus disabled={isSubmitting} onChange={handleChange} onPaste={handlePaste} value={code} />
           </div>
 
           {error ? <p className="mt-4 text-center text-sm text-rose-500">{error}</p> : null}
