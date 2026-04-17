@@ -45,12 +45,10 @@ export const PREMIUM_FEATURES_LIST: PremiumFeature[] = [
 export const PRICING = {
   monthly: {
     amount: 4.99,
-    priceId: import.meta.env.VITE_STRIPE_MONTHLY_PRICE_ID ?? '',
     label: 'Monthly',
   },
   yearly: {
     amount: 49.99,
-    priceId: import.meta.env.VITE_STRIPE_YEARLY_PRICE_ID ?? '',
     label: 'Yearly',
     savingsLabel: 'Save 18%',
   },

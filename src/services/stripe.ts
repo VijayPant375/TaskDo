@@ -18,12 +18,6 @@ interface PortalSessionResponse {
 }
 
 export async function redirectToCheckout(billingPeriod: BillingPeriod) {
-  const priceId = PRICING[billingPeriod].priceId;
-
-  if (!priceId) {
-    throw new Error(`Missing Stripe price ID for ${billingPeriod} plan.`);
-  }
-
   const payload = {
     billingPeriod,
     successUrl: `${window.location.origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,

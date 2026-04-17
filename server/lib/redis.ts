@@ -32,6 +32,10 @@ function createRedisClient() {
     enableOfflineQueue: false,
     lazyConnect: true,
     maxRetriesPerRequest: 1,
+    retryStrategy(times) {
+      console.warn(`Redis connection retry attempt ${times} in progress...`);
+      return Math.min(times * 1000, 10000);
+    },
   });
 
   client.on('ready', () => {

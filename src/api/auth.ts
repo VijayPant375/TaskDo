@@ -1,7 +1,7 @@
 import { API_URL } from '../services/api';
 import type { AuthResponse, AuthSubmission } from '../types/auth';
 
-const AUTH_API_BASE = `${API_URL}/api/auth`;
+const AUTH_API_BASE = API_URL === '/api' ? '/api/auth' : `${API_URL}/api/auth`;
 
 async function parseError(response: Response) {
   try {

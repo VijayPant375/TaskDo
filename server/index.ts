@@ -460,7 +460,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.post('/api/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (request, response) => {
   if (!requireStripe(response)) {
     return;
   }
@@ -876,15 +876,16 @@ app.post('/api/create-checkout-session', requireAuth, async (request: Authentica
 
     const storedSubscription = getSubscriptionByUserId(user.id);
 
-    if (!process.env.STRIPE_PRICE_ID) {
-      response.status(500).json({ error: "Stripe price ID missing" });
+    const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID;
+    const yearlyPriceId = process.env.STRIPE_YEARLY_PRICE_ID;
+
+    if (!monthlyPriceId || !yearlyPriceId) {
+      response.status(500).json({ error: "Stripe price IDs missing from server configuration" });
       return;
     }
 
-    const priceId =
-      billingPeriod === 'monthly'
-        ? (process.env.STRIPE_PRICE_ID as string)
-        : (process.env.STRIPE_YEARLY_PRICE_ID as string);
+    const priceId = billingPeriod === 'monthly' ? monthlyPriceId : yearlyPriceId;
+    console.log(`Using Stripe price ID for ${billingPeriod} plan: ${priceId}`);
 
     const session = await stripe!.checkout.sessions.create({
       mode: 'subscription',

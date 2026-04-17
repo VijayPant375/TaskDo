@@ -1,11 +1,13 @@
-const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3001');
+const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:3001');
 const authTokenStorageKey = 'taskdo.token';
 
 async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
   const token =
     typeof window !== 'undefined' ? window.localStorage.getItem(authTokenStorageKey) : null;
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const normalizedPath = API_URL === '/api' && path.startsWith('/api') ? path.replace(/^\/api/, '') : path;
+
+  const response = await fetch(`${API_URL}${normalizedPath}`, {
     credentials: 'include',
     ...init,
     headers: {
