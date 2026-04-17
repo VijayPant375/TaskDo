@@ -42,10 +42,9 @@ export function CodeInput({
   };
 
   const handleChange = (inputVal: string, index: number) => {
-    if (!/^[0-9]?$/.test(inputVal)) return;
-    
-    onChange(inputVal, index);
-    if (inputVal) {
+    const digit = inputVal.replace(/\D/g, '').slice(-1);
+    onChange(digit, index);
+    if (digit) {
       focusInput(index + 1);
     }
   };

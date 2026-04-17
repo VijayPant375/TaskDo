@@ -621,12 +621,19 @@ app.get('/api/auth/google/callback', async (request, response) => {
       let mongoUser = await User.findOne({ googleId: profile.id });
 
       if (!mongoUser) {
-        mongoUser = await User.create({
-          googleId: profile.id,
-          email: normalizedEmail,
-          isOAuthUser: true,
-          mfaEnabled: false
-        });
+        mongoUser = await User.findOne({ email: normalizedEmail });
+        if (mongoUser) {
+          mongoUser.googleId = profile.id;
+          mongoUser.isOAuthUser = true;
+          await mongoUser.save();
+        } else {
+          mongoUser = await User.create({
+            googleId: profile.id,
+            email: normalizedEmail,
+            isOAuthUser: true,
+            mfaEnabled: false
+          });
+        }
       }
 
       const localUser = upsertLocalUser({
