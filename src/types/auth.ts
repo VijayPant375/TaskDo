@@ -10,7 +10,7 @@ export interface AuthUser {
 export interface AuthSessionResponse {
   googleOAuthEnabled: boolean;
   isAuthenticated: boolean;
-  user: AuthUser | null;
+  user: (AuthUser & { username?: string }) | null;
 }
 
 export interface AuthResponse {

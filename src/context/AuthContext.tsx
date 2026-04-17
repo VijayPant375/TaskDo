@@ -112,17 +112,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const session = await fetchAuthSession();
 
       if (session.user) {
-        setUser(session.user);
+        const sessionUser: AuthUser = {
+          ...session.user,
+          username: session.user.username ?? session.user.name,
+        };
+        setUser(sessionUser);
         setMfaChallengeEmail(null);
         setMfaChallengeToken(null);
 
         if (tokenFromRedirect) {
-          storeAuthenticatedUser(tokenFromRedirect, session.user);
+          storeAuthenticatedUser(tokenFromRedirect, sessionUser);
           clearAuthRedirectParams(url);
         } else {
           const storedToken = localStorage.getItem(authTokenStorageKey);
           if (storedToken) {
-            storeAuthenticatedUser(storedToken, session.user);
+            storeAuthenticatedUser(storedToken, sessionUser);
           }
         }
 

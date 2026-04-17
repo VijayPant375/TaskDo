@@ -132,17 +132,25 @@ app.put('/api/user/username', requireAuth, async (request: AuthenticatedRequest,
       return;
     }
 
-    const existingUsername = await User.exists({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
-
-    if (existingUsername) {
-      response.status(400).json({ error: 'Username already taken' });
-      return;
-    }
-
     const user = await User.findById(request.authUser!.id);
     if (!user) {
       response.status(404).json({ error: 'User not found' });
       return;
+    }
+
+    // Allow saving the same username without triggering a uniqueness error
+    const isSameUsername = user.username?.toLowerCase() === username.toLowerCase();
+    if (!isSameUsername) {
+      // Exclude current user from the uniqueness check
+      const existingUsername = await User.exists({
+        _id: { $ne: user._id },
+        username: { $regex: new RegExp(`^${username}$`, 'i') },
+      });
+
+      if (existingUsername) {
+        response.status(409).json({ error: 'Username already taken' });
+        return;
+      }
     }
 
     user.username = username;
@@ -153,7 +161,7 @@ app.put('/api/user/username', requireAuth, async (request: AuthenticatedRequest,
       id: user._id.toString(),
       name: user.username,
       provider: user.googleId ? 'google' : 'local',
-      providerAccountId: user.googleId ?? user._id.toString()
+      providerAccountId: user.googleId ?? user._id.toString(),
     });
 
     response.json({ success: true, username: user.username });
@@ -594,7 +602,7 @@ app.get('/api/health', (_request, response) => {
 
 app.get('/api/auth/session', async (request, response) => {
   const user = getAuthenticatedUserFromRequest(request);
-  const mongoUser = user ? await User.findById(user.id).select('mfaEnabled') : null;
+  const mongoUser = user ? await User.findById(user.id).select('mfaEnabled username') : null;
 
   response.json({
     googleOAuthEnabled: isGoogleOAuthConfigured,
@@ -605,7 +613,8 @@ app.get('/api/auth/session', async (request, response) => {
           email: user.email,
           id: user.id,
           mfaEnabled: Boolean(mongoUser?.mfaEnabled),
-          name: user.name,
+          name: mongoUser?.username || user.name,
+          username: mongoUser?.username || user.name,
         }
       : null,
   });
@@ -707,11 +716,13 @@ app.get('/api/auth/google/callback', async (request, response) => {
         }
       }
 
+      // Use the stored username from DB — do NOT use profile.name which would overwrite
+      // a custom username set by the user
       const localUser = upsertLocalUser({
         avatarUrl: null,
         email: mongoUser.email,
         id: mongoUser._id.toString(),
-        name: profile.name,
+        name: mongoUser.username || mongoUser.email.split('@')[0],
         provider: 'google',
         providerAccountId: profile.id,
       });

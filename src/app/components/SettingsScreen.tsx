@@ -48,8 +48,14 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
 
     const trimmedUsername = newUsername.trim();
 
-    if (!trimmedUsername || trimmedUsername === user?.name) {
+    if (!trimmedUsername) {
       setUsernameState('idle');
+      return;
+    }
+
+    // If the user typed their current username, treat it as available immediately
+    if (trimmedUsername.toLowerCase() === user?.username?.toLowerCase() || trimmedUsername === user?.name) {
+      setUsernameState('available');
       return;
     }
 
@@ -70,7 +76,7 @@ export function SettingsScreen({ activeTaskCount, onClose, onUpgrade }: Settings
     }, 500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [isEditingUsername, newUsername, user?.name]);
+  }, [isEditingUsername, newUsername, user?.name, user?.username]);
 
   const handleSaveUsername = async () => {
     if (usernameState !== 'available') return;

@@ -1,4 +1,4 @@
-import { API_URL } from '../services/api';
+import { API_URL, apiPut } from '../services/api';
 import type { AuthResponse, AuthSubmission } from '../types/auth';
 
 const AUTH_API_BASE = API_URL === '/api' ? '/api/auth' : `${API_URL}/api/auth`;
@@ -74,15 +74,5 @@ export async function checkUsername(username: string) {
 }
 
 export async function updateUsername(username: string) {
-  const response = await fetch(`${API_URL === '/api' ? '' : API_URL}/api/user/username`, {
-    body: JSON.stringify({ username }),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'PUT',
-  });
-
-  if (!response.ok) {
-    throw new Error(await parseError(response));
-  }
-
-  return (await response.json()) as { success: boolean; username: string };
+  return apiPut<{ success: boolean; username: string }>('/api/user/username', { username });
 }
