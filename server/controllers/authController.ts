@@ -43,13 +43,14 @@ function verifyMfaChallengeToken(token: string) {
 
 function serializeAuthResponse(user: {
   email: string;
+  username?: string;
   mfaEnabled?: boolean;
   _id: { toString(): string };
 }) {
   const authUser = upsertLocalUser({
     email: user.email,
     id: user._id.toString(),
-    name: user.email.split('@')[0],
+    name: user.username || user.email.split('@')[0],
   });
 
   const token = createAuthToken(authUser.id);
@@ -60,7 +61,7 @@ function serializeAuthResponse(user: {
       email: user.email,
       id: authUser.id,
       mfaEnabled: Boolean(user.mfaEnabled),
-      username: user.email.split('@')[0],
+      username: user.username || user.email.split('@')[0],
     },
   };
 }
@@ -69,9 +70,10 @@ export async function signup(request: Request, response: Response) {
   try {
     const email = typeof request.body.email === 'string' ? request.body.email.trim().toLowerCase() : '';
     const password = typeof request.body.password === 'string' ? request.body.password : '';
+    const username = typeof request.body.username === 'string' ? request.body.username.trim() : '';
 
-    if (!email || !password) {
-      response.status(400).json({ error: 'Email and password are required' });
+    if (!email || !password || !username) {
+      response.status(400).json({ error: 'Email, password, and username are required' });
       return;
     }
 
@@ -82,8 +84,16 @@ export async function signup(request: Request, response: Response) {
       return;
     }
 
+    const existingUsername = await User.exists({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+
+    if (existingUsername) {
+      response.status(400).json({ error: 'Username already taken' });
+      return;
+    }
+
     const user = await User.create({
       email,
+      username,
       password: await bcrypt.hash(password, 10),
     });
 
@@ -104,7 +114,7 @@ export async function login(request: Request, response: Response) {
       return;
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
 
     if (!user || !(await bcrypt.compare(password, user.password || ''))) {
       response.status(400).json({ error: 'Invalid credentials' });
@@ -139,7 +149,7 @@ export async function verifyLoginMfa(request: Request, response: Response) {
     }
 
     const userId = verifyMfaChallengeToken(challengeToken);
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+mfaSecret');
 
     if (!user || !user.mfaEnabled || !user.mfaSecret) {
       response.status(400).json({ error: 'MFA is not enabled for this account' });
@@ -158,7 +168,7 @@ export async function verifyLoginMfa(request: Request, response: Response) {
         email: user.email,
         id: user._id.toString(),
         mfaEnabled: true,
-        username: user.email.split('@')[0],
+        username: user.username || user.email.split('@')[0],
       },
     });
   } catch (error) {
@@ -178,7 +188,7 @@ export async function checkUsername(request: Request, response: Response) {
       return;
     }
 
-    const existingUser = await User.exists({ username });
+    const existingUser = await User.exists({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
     response.json({ available: !existingUser });
   } catch (error) {
     response.status(500).json({ error: getErrorMessage(error) });

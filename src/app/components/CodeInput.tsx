@@ -50,7 +50,7 @@ export function CodeInput({
   };
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('flex flex-row items-center justify-start sm:justify-center gap-1.5 sm:gap-2 w-full max-w-full overflow-hidden', className)}>
       {value.map((digit, index) => (
         <input
           key={index}
@@ -59,7 +59,7 @@ export function CodeInput({
           }}
           autoComplete={index === 0 ? 'one-time-code' : 'off'}
           className={cn(
-            'flex h-12 w-12 items-center justify-center rounded-xl border border-input bg-input-background text-center text-base outline-none transition',
+            'flex h-12 w-10 sm:w-12 shrink-0 items-center justify-center rounded-xl border border-input bg-input-background text-center text-base outline-none transition',
             'focus:border-ring focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50'
           )}
           disabled={disabled}

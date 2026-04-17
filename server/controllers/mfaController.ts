@@ -123,7 +123,7 @@ export async function enableMFA(request: MfaRequest, response: Response) {
       return;
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+mfaSecret');
     if (!user) {
       response.status(404).json({ error: 'User not found' });
       return;
@@ -157,7 +157,7 @@ export async function verifyMFA(request: MfaRequest, response: Response) {
       return;
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+mfaSecret');
     if (!user || !user.mfaSecret || !user.mfaEnabled) {
       response.status(400).json({ error: 'MFA is not enabled' });
       return;
@@ -189,7 +189,7 @@ export async function disableMFA(request: MfaRequest, response: Response) {
       return;
     }
 
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).select('+mfaSecret');
     if (!user || !user.mfaSecret || !user.mfaEnabled) {
       response.status(400).json({ error: 'MFA is not enabled' });
       return;

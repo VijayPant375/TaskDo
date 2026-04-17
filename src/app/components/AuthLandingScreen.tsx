@@ -103,6 +103,14 @@ export function AuthLandingScreen({
     );
   }
 
+  const isFormValid = () => {
+    if (!email.trim() || !password) return false;
+    if (mode === 'signup') {
+      return usernameState === 'available';
+    }
+    return true;
+  };
+
   const handleSubmit = async () => {
     setError('');
     setIsSubmitting(true);
@@ -119,7 +127,11 @@ export function AuthLandingScreen({
 
       await onSignUp({ email, password, username });
     } catch (submissionError) {
-      setError(submissionError instanceof Error ? submissionError.message : 'Unable to continue.');
+      let msg = submissionError instanceof Error ? submissionError.message : 'Unable to continue.';
+      if (mode === 'signup' && msg === 'User already exists') {
+        msg = 'Email already exists, try login.';
+      }
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -238,7 +250,7 @@ export function AuthLandingScreen({
                     </p>
                   ) : null}
                   {usernameState === 'taken' ? (
-                    <p className="mt-2 text-xs text-rose-500">That username is already taken.</p>
+                    <p className="mt-2 text-xs text-rose-500">Username already taken.</p>
                   ) : null}
                   {usernameState === 'available' ? (
                     <p className="mt-2 text-xs text-emerald-600">Username is available.</p>
@@ -270,7 +282,7 @@ export function AuthLandingScreen({
 
               <Button
                 className="h-12 w-full rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-base text-white hover:from-amber-600 hover:to-orange-600"
-                disabled={isSubmitting || isLoading}
+                disabled={isSubmitting || isLoading || !isFormValid()}
                 onClick={() => void handleSubmit()}
               >
                 {isSubmitting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}

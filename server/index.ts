@@ -123,6 +123,46 @@ function getAllowedFrontendOrigins() {
 
 const allowedFrontendOrigins = getAllowedFrontendOrigins();
 
+app.put('/api/user/username', requireAuth, async (request: AuthenticatedRequest, response) => {
+  try {
+    const username = typeof request.body.username === 'string' ? request.body.username.trim() : '';
+
+    if (!username) {
+      response.status(400).json({ error: 'Username is required' });
+      return;
+    }
+
+    const existingUsername = await User.exists({ username: { $regex: new RegExp(`^${username}$`, 'i') } });
+
+    if (existingUsername) {
+      response.status(400).json({ error: 'Username already taken' });
+      return;
+    }
+
+    const user = await User.findById(request.authUser!.id);
+    if (!user) {
+      response.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    user.username = username;
+    await user.save();
+
+    upsertLocalUser({
+      email: user.email,
+      id: user._id.toString(),
+      name: user.username,
+      provider: user.googleId ? 'google' : 'local',
+      providerAccountId: user.googleId ?? user._id.toString()
+    });
+
+    response.json({ success: true, username: user.username });
+  } catch (error) {
+    console.error('Failed to update username:', error);
+    response.status(500).json({ error: 'Unable to update username' });
+  }
+});
+
 function resolveSafeReturnTo(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) {
     return '/';
@@ -273,6 +313,35 @@ function isPremiumUser(userId: string) {
   return serializeSubscriptionForClient(userId).tier === 'premium';
 }
 
+async function getOrCreateStripeCustomer(user: { id: string; email: string; name: string }) {
+  if (!stripe) return undefined;
+
+  const subscription = getSubscriptionByUserId(user.id);
+  if (subscription?.stripeCustomerId) {
+    return subscription.stripeCustomerId;
+  }
+
+  const customer = await stripe.customers.create({
+    email: user.email,
+    name: user.name,
+    metadata: {
+      userId: user.id,
+    },
+  });
+
+  upsertSubscriptionForUser(user.id, {
+    billingPeriod: subscription?.billingPeriod ?? null,
+    cancelAtPeriodEnd: subscription?.cancelAtPeriodEnd ?? false,
+    currentPeriodEnd: subscription?.currentPeriodEnd ?? null,
+    status: subscription?.status ?? 'incomplete',
+    stripeCustomerId: customer.id,
+    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? null,
+    tier: subscription?.tier ?? 'free',
+  });
+
+  return customer.id;
+}
+
 async function persistSubscriptionForUser(userId: string, subscription: Stripe.Subscription) {
   const payload = getSubscriptionPayload(subscription);
 
@@ -398,9 +467,9 @@ async function generateUniqueGoogleUsername(email: string) {
   const sanitizedBaseUsername = baseUsername.toLowerCase().replace(/[^a-z0-9_]/g, '') || 'taskdo';
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const suffix = Math.random().toString(36).slice(2, 6);
-    const candidate = `${sanitizedBaseUsername}${suffix}`;
-    const existingUser = await User.exists({ username: candidate });
+    const suffix = attempt === 0 ? '' : Math.random().toString(36).slice(2, 6);
+    const candidate = attempt === 0 ? sanitizedBaseUsername : `${sanitizedBaseUsername}${suffix}`;
+    const existingUser = await User.exists({ username: { $regex: new RegExp(`^${candidate}$`, 'i') } });
 
     if (!existingUser) {
       return candidate;
@@ -617,7 +686,7 @@ app.get('/api/auth/google/callback', async (request, response) => {
         return;
       }
 
-      const normalizedEmail = profile.email.toLowerCase();
+      const normalizedEmail = profile.email.trim().toLowerCase();
       let mongoUser = await User.findOne({ googleId: profile.id });
 
       if (!mongoUser) {
@@ -627,9 +696,11 @@ app.get('/api/auth/google/callback', async (request, response) => {
           mongoUser.isOAuthUser = true;
           await mongoUser.save();
         } else {
+          const generatedUsername = await generateUniqueGoogleUsername(normalizedEmail);
           mongoUser = await User.create({
             googleId: profile.id,
             email: normalizedEmail,
+            username: generatedUsername,
             isOAuthUser: true,
             mfaEnabled: false
           });
@@ -887,6 +958,8 @@ app.post('/api/create-checkout-session', requireAuth, async (request: Authentica
     const priceId = billingPeriod === 'monthly' ? monthlyPriceId : yearlyPriceId;
     console.log(`Using Stripe price ID for ${billingPeriod} plan: ${priceId}`);
 
+    const customerId = await getOrCreateStripeCustomer(user);
+
     const session = await stripe!.checkout.sessions.create({
       mode: 'subscription',
       line_items: [
@@ -898,8 +971,7 @@ app.post('/api/create-checkout-session', requireAuth, async (request: Authentica
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       client_reference_id: user.id,
-      customer: storedSubscription?.stripeCustomerId ?? undefined,
-      customer_email: storedSubscription?.stripeCustomerId ? undefined : user.email,
+      customer: customerId,
       metadata: {
         billingPeriod,
         product: 'taskdo-premium',
@@ -978,15 +1050,21 @@ app.post('/api/create-portal-session', requireAuth, async (request: Authenticate
     const { returnUrl } = request.body as {
       returnUrl?: string;
     };
-    const subscription = getSubscriptionByUserId(request.authUser!.id);
+    const user = getUserById(request.authUser!.id);
+    if (!user) {
+      response.status(401).send('Authentication required.');
+      return;
+    }
 
-    if (!subscription?.stripeCustomerId) {
+    const customerId = await getOrCreateStripeCustomer(user);
+
+    if (!customerId) {
       response.status(400).send('No Stripe customer is linked to this account.');
       return;
     }
 
     const portalSession = await stripe!.billingPortal.sessions.create({
-      customer: subscription.stripeCustomerId,
+      customer: customerId,
       return_url: returnUrl || frontendUrl,
     });
 
@@ -1011,7 +1089,20 @@ app.get('*', (request, response, next) => {
 });
 
 async function startServer() {
-  console.log("STRIPE PRICE:", process.env.STRIPE_PRICE_ID);
+  if (isGoogleOAuthConfigured) {
+    console.log("GOOGLE OAUTH ENABLED");
+  }
+
+  const missingStripePrices = [];
+  if (!process.env.STRIPE_MONTHLY_PRICE_ID) missingStripePrices.push('STRIPE_MONTHLY_PRICE_ID');
+  if (!process.env.STRIPE_YEARLY_PRICE_ID) missingStripePrices.push('STRIPE_YEARLY_PRICE_ID');
+  
+  if (missingStripePrices.length > 0) {
+    console.error(`WARNING: Missing Stripe Price IDs in environment variables: ${missingStripePrices.join(', ')}`);
+  } else {
+    console.log("STRIPE CONFIGURED with Monthly:", process.env.STRIPE_MONTHLY_PRICE_ID, "Yearly:", process.env.STRIPE_YEARLY_PRICE_ID);
+  }
+
   await connectDB();
 
   app.listen(port, host, () => {

@@ -80,9 +80,9 @@ export function useAlarmManager({ onSnoozeTask, tasks }: UseAlarmManagerOptions)
     setAlarmingTask(task);
 
     if ('Notification' in window && notificationPermission === 'granted') {
-      const notification = new Notification('Task Do - Reminder', {
+      const notification = new Notification('TaskDo - Reminder', {
         body: `${task.name}\n${task.description || 'No description'}`,
-        icon: '/favicon.ico',
+        icon: '/favicon.png',
         tag: task.id,
         requireInteraction: true,
       });

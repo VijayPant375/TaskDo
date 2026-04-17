@@ -72,3 +72,17 @@ export async function checkUsername(username: string) {
   const payload = (await response.json()) as { available: boolean };
   return payload.available;
 }
+
+export async function updateUsername(username: string) {
+  const response = await fetch(`${API_URL === '/api' ? '' : API_URL}/api/user/username`, {
+    body: JSON.stringify({ username }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'PUT',
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return (await response.json()) as { success: boolean; username: string };
+}
