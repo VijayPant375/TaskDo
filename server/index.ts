@@ -580,14 +580,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 app.use(
   cors({
     credentials: true,
-    origin: (origin, callback) => {
-      if (!origin || allowedFrontendOrigins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin} is not allowed by CORS.`));
-    },
+    origin: true
   })
 );
 app.use(express.json());

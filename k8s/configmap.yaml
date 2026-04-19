@@ -12,3 +12,5 @@ data:
   FRONTEND_URL: "http://taskdo.local"
   GOOGLE_REDIRECT_URI: "http://taskdo.local/api/auth/google/callback"
   GOOGLE_CALLBACK_URL: "http://taskdo.local/api/auth/google/callback"
+  STRIPE_MONTHLY_PRICE_ID: "price_1TJu5PCPVGWl48dJpIXAg0BE"
+  STRIPE_YEARLY_PRICE_ID: "price_1TJu7WCPVGWl48dJyU9Ir2DT"

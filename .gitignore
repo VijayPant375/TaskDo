@@ -18,3 +18,6 @@ src/app/App.copy.tsx
 /stripe.ts
 /subscription.ts
 ATTRIBUTIONS.md
+
+# Kubernetes local secrets
+k8s/secrets.local.yaml
