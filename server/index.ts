@@ -85,10 +85,9 @@ const jwtAccessSecret = getRequiredEnv('JWT_ACCESS_SECRET');
 const jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+console.log("GOOGLE_REDIRECT_URI =", process.env.GOOGLE_REDIRECT_URI);
 const googleRedirectUri =
-  process.env.GOOGLE_CALLBACK_URL ??
-  process.env.GOOGLE_REDIRECT_URI ??
-  `http://localhost:${port}/api/auth/google/callback`;
+  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/auth/google/callback';
 const isGoogleOAuthConfigured = Boolean(googleClientId && googleClientSecret);
 const cookieSecure = process.env.COOKIE_SECURE?.trim().toLowerCase();
 const secureCookies =

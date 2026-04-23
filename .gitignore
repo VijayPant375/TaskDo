@@ -1,6 +1,10 @@
 # Dependencies & Build Output
 node_modules
+node_modules/
+server/node_modules/
 dist
+dist/
+server/dist/
 client/dist
 
 # Environment variables
@@ -22,6 +26,7 @@ server/.env.*
 secrets.json
 
 # Kubernetes secrets
+k8s/secrets/secrets.local.yaml
 k8s/secrets.local.yaml
 k8s/secrets/
 
@@ -47,3 +52,6 @@ ATTRIBUTIONS.md
 
 # Local tooling
 .codex
+.DS_Store
+Thumbs.db
+.vscode/

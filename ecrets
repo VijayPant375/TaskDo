@@ -1,0 +1,102 @@
+[1mdiff --git a/.env.example b/.env.example[m
+[1mindex 30773b5..8b1458c 100644[m
+[1m--- a/.env.example[m
+[1m+++ b/.env.example[m
+[36m@@ -15,6 +15,7 @@[m [mSTRIPE_WEBHOOK_SECRET=stripe_webhook_secret_here[m
+ STRIPE_MONTHLY_PRICE_ID=stripe_monthly_price_id_here[m
+ STRIPE_YEARLY_PRICE_ID=stripe_yearly_price_id_here[m
+ FRONTEND_URL=http://localhost[m
+[32m+[m[32mCOOKIE_SECURE=false[m
+ VITE_API_URL=http://localhost:3001[m
+ PORT=3001[m
+ NODE_ENV=production[m
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex a066222..605c160 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -1,6 +1,10 @@[m
+ # Dependencies & Build Output[m
+ node_modules[m
+[32m+[m[32mnode_modules/[m
+[32m+[m[32mserver/node_modules/[m
+ dist[m
+[32m+[m[32mdist/[m
+[32m+[m[32mserver/dist/[m
+ client/dist[m
+ [m
+ # Environment variables[m
+[36m@@ -22,6 +26,7 @@[m [mserver/.env.*[m
+ secrets.json[m
+ [m
+ # Kubernetes secrets[m
+[32m+[m[32mk8s/secrets/secrets.local.yaml[m
+ k8s/secrets.local.yaml[m
+ k8s/secrets/[m
+ [m
+[36m@@ -47,3 +52,6 @@[m [mATTRIBUTIONS.md[m
+ [m
+ # Local tooling[m
+ .codex[m
+[32m+[m[32m.DS_Store[m
+[32m+[m[32mThumbs.db[m
+[32m+[m[32m.vscode/[m
+[1mdiff --git a/k8s/base/configmap.yaml b/k8s/base/configmap.yaml[m
+[1mindex 76cbbf6..897c495 100644[m
+[1m--- a/k8s/base/configmap.yaml[m
+[1m+++ b/k8s/base/configmap.yaml[m
+[36m@@ -11,8 +11,8 @@[m [mdata:[m
+   INTERNAL_MONGO_URI: "mongodb://mongo:27017/taskdo"[m
+   INTERNAL_REDIS_URL: "redis://redis:6379"[m
+   COOKIE_SECURE: "false"[m
+[31m-  FRONTEND_URL: "http://taskdo.local"[m
+[31m-  GOOGLE_REDIRECT_URI: "http://taskdo.local/api/auth/google/callback"[m
+[31m-  GOOGLE_CALLBACK_URL: "http://taskdo.local/api/auth/google/callback"[m
+[32m+[m[32m  FRONTEND_URL: "http://localhost:8080"[m
+[32m+[m[32m  GOOGLE_REDIRECT_URI: "http://localhost:8080/api/auth/google/callback"[m
+[32m+[m[32m  GOOGLE_CALLBACK_URL: "http://localhost:8080/api/auth/google/callback"[m
+   STRIPE_MONTHLY_PRICE_ID: "price_1TJu5PCPVGWl48dJpIXAg0BE"[m
+[31m-  STRIPE_YEARLY_PRICE_ID: "price_1TJu7WCPVGWl48dJyU9Ir2DT"[m
+[32m+[m[32m  STRIPE_YEARLY_PRICE_ID: "price_1TJu7WCPVGWl48dJyU9Ir2DT"[m
+\ No newline at end of file[m
+[1mdiff --git a/k8s/base/frontend-service.yaml b/k8s/base/frontend-service.yaml[m
+[1mindex 8f57db9..0f59e40 100644[m
+[1m--- a/k8s/base/frontend-service.yaml[m
+[1m+++ b/k8s/base/frontend-service.yaml[m
+[36m@@ -9,4 +9,4 @@[m [mspec:[m
+   ports:[m
+     - port: 80[m
+       targetPort: 80[m
+[31m-  type: NodePort[m
+[32m+[m[32m  type: ClusterIP[m
+\ No newline at end of file[m
+[1mdiff --git a/server/index.ts b/server/index.ts[m
+[1mindex 0d9198e..8a93a15 100644[m
+[1m--- a/server/index.ts[m
+[1m+++ b/server/index.ts[m
+[36m@@ -85,10 +85,9 @@[m [mconst jwtAccessSecret = getRequiredEnv('JWT_ACCESS_SECRET');[m
+ const jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');[m
+ const googleClientId = process.env.GOOGLE_CLIENT_ID;[m
+ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;[m
+[32m+[m[32mconsole.log("GOOGLE_REDIRECT_URI =", process.env.GOOGLE_REDIRECT_URI);[m
+ const googleRedirectUri =[m
+[31m-  process.env.GOOGLE_CALLBACK_URL ??[m
+[31m-  process.env.GOOGLE_REDIRECT_URI ??[m
+[31m-  `http://localhost:${port}/api/auth/google/callback`;[m
+[32m+[m[32m  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/auth/google/callback';[m
+ const isGoogleOAuthConfigured = Boolean(googleClientId && googleClientSecret);[m
+ const cookieSecure = process.env.COOKIE_SECURE?.trim().toLowerCase();[m
+ const secureCookies =[m
+[1mdiff --git a/server/lib/cookies.ts b/server/lib/cookies.ts[m
+[1mindex 2193d6b..d14669e 100644[m
+[1m--- a/server/lib/cookies.ts[m
+[1m+++ b/server/lib/cookies.ts[m
+[36m@@ -65,7 +65,7 @@[m [mexport function setAuthCookies([m
+       maxAge: input.accessTokenMaxAgeSeconds,[m
+       path: '/',[m
+       sameSite: 'Lax',[m
+[31m-      secure: input.secureCookies,[m
+[32m+[m[32m      secure: false,[m
+     })[m
+   );[m
+   response.append([m
+
