@@ -6,8 +6,10 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "3001"
-  MONGO_URI: "mongodb://mongo-service:27017/taskdo"
-  REDIS_URL: "redis://redis-service:6379"
+  MONGO_URI: "mongodb://mongo:27017/taskdo"
+  REDIS_URL: "redis://redis:6379"
+  INTERNAL_MONGO_URI: "mongodb://mongo:27017/taskdo"
+  INTERNAL_REDIS_URL: "redis://redis:6379"
   COOKIE_SECURE: "false"
   FRONTEND_URL: "http://taskdo.local"
   GOOGLE_REDIRECT_URI: "http://taskdo.local/api/auth/google/callback"

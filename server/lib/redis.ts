@@ -1,5 +1,6 @@
 import { Redis } from 'ioredis';
 import type { StoredOAuthState, StoredSession } from './store.js';
+import { getServiceEnvValue } from './runtimeConfig.js';
 
 let sharedRedisClient: Redis | null = null;
 let redisAvailable = false;
@@ -17,8 +18,7 @@ export interface CachedSubscriptionPayload {
 }
 
 function getRedisUrl() {
-  const value = process.env.REDIS_URL?.trim();
-  return value ? value : null;
+  return getServiceEnvValue('REDIS_URL', 'INTERNAL_REDIS_URL');
 }
 
 function createRedisClient() {

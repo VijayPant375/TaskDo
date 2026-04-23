@@ -1,4 +1,10 @@
-const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '/api' : 'http://localhost:3001');
+const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
+const API_URL =
+  configuredApiUrl && configuredApiUrl.length > 0
+    ? configuredApiUrl.replace(/\/$/, '')
+    : import.meta.env.PROD
+      ? '/api'
+      : 'http://localhost:3001';
 const authTokenStorageKey = 'taskdo.token';
 
 async function request<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {

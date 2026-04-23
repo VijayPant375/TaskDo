@@ -56,6 +56,7 @@ import {
   createAuthenticatedBrowserSession,
   rotateAuthenticatedBrowserSession,
 } from './lib/browserAuth.js';
+import { getServiceEnvValue } from './lib/runtimeConfig.js';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const serverDirectory = path.dirname(currentFilePath);
@@ -67,7 +68,7 @@ const envFilePath = envFileCandidates.find((candidate) => fs.existsSync(candidat
 
 dotenv.config(envFilePath ? { path: envFilePath } : undefined);
 
-const configuredRedisUrl = process.env.REDIS_URL?.trim();
+const configuredRedisUrl = getServiceEnvValue('REDIS_URL', 'INTERNAL_REDIS_URL');
 
 if (!configuredRedisUrl) {
   console.warn(
