@@ -15,11 +15,17 @@ export async function refreshAuthSession() {
 }
 
 export function startGoogleSignIn(returnTo?: string) {
-  const baseUrl = API_URL || window.location.origin;
-  const url = new URL('/api/auth/google', baseUrl);
+  const base = API_URL.startsWith('http')
+    ? API_URL
+    : window.location.origin;
+
+  let url = API_URL.startsWith('http')
+  ? `${API_URL}/api/auth/google`
+  : `${window.location.origin}${API_URL}/auth/google`;
+
   if (returnTo) {
-    url.searchParams.set('returnTo', returnTo);
+    url += `?returnTo=${encodeURIComponent(returnTo)}`;
   }
 
-  window.location.href = url.toString();
+  window.location.href = url;
 }

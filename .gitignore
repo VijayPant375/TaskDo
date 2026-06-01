@@ -1,12 +1,41 @@
+# Dependencies & Build Output
+node_modules
+node_modules/
+server/node_modules/
+dist
+dist/
+server/dist/
+client/dist
+
+# Environment variables
 .env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.env
 server/.env
-node_modules
-dist
+server/.env.*
+
+# Keys & Certificates
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+
+# Kubernetes secrets
+k8s/secrets/secrets.local.yaml
+k8s/secrets.local.yaml
+k8s/secrets/
+
+# Logs & Data
 *.log
 data
 server/data
-client/dist
+
+# Ignore specific source files
 src/app/App.new.tsx
 src/app/App.copy.tsx
 /App.tsx
@@ -17,4 +46,12 @@ src/app/App.copy.tsx
 /UpgradeModal.tsx
 /stripe.ts
 /subscription.ts
+
+# Documentation
 ATTRIBUTIONS.md
+
+# Local tooling
+.codex
+.DS_Store
+Thumbs.db
+.vscode/

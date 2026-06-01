@@ -16,7 +16,7 @@ spec:
       restartPolicy: Always
       containers:
         - name: frontend
-          image: taskdo-frontend:v7
+          image: taskdo-frontend:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 80

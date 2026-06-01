@@ -14,8 +14,8 @@ Do not commit hardcoded secrets into `secrets.yaml` or any other deployment file
 
 Your secret must contain the following keys exactly:
 
-* `MONGO_URI` (Can be safely supplied via ConfigMap or Secret, default: `mongodb://mongo-service:27017/taskdo`)
-* `REDIS_URL` (Can be safely supplied via ConfigMap or Secret, default: `redis://redis-service:6379`)
+* `MONGO_URI` (Can be safely supplied via ConfigMap or Secret, default: `mongodb://mongo:27017/taskdo`)
+* `REDIS_URL` (Can be safely supplied via ConfigMap or Secret, default: `redis://redis:6379`)
 * `JWT_ACCESS_SECRET`
 * `JWT_REFRESH_SECRET`
 * `GOOGLE_CLIENT_ID`
@@ -25,6 +25,13 @@ Your secret must contain the following keys exactly:
 * `STRIPE_MONTHLY_PRICE_ID`
 * `STRIPE_YEARLY_PRICE_ID`
 * `ENCRYPTION_KEY`
+
+Optional non-breaking internal service variables:
+
+* `INTERNAL_MONGO_URI` (recommended for Docker/Kubernetes: `mongodb://mongo:27017/taskdo`)
+* `INTERNAL_REDIS_URL` (recommended for Docker/Kubernetes: `redis://redis:6379`)
+
+For the frontend image, set `VITE_API_URL=/api` at image build time so the static bundle continues to route API traffic through the cluster ingress/proxy path.
 
 ### Injection Method 1: Platform UI (Recommended)
 

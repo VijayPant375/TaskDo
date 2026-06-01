@@ -65,7 +65,7 @@ export function setAuthCookies(
       maxAge: input.accessTokenMaxAgeSeconds,
       path: '/',
       sameSite: 'Lax',
-      secure: input.secureCookies,
+      secure: false,
     })
   );
   response.append(
@@ -75,7 +75,7 @@ export function setAuthCookies(
       maxAge: input.refreshTokenMaxAgeSeconds,
       path: '/',
       sameSite: 'Lax',
-      secure: input.secureCookies,
+      secure: false,
     })
   );
 }
@@ -88,7 +88,7 @@ export function clearAuthCookies(response: Response, secureCookies: boolean) {
       maxAge: 0,
       path: '/',
       sameSite: 'Lax',
-      secure: secureCookies,
+      secure: false,
     })
   );
   response.append(
@@ -98,7 +98,7 @@ export function clearAuthCookies(response: Response, secureCookies: boolean) {
       maxAge: 0,
       path: '/',
       sameSite: 'Lax',
-      secure: secureCookies,
+      secure: false,
     })
   );
 }

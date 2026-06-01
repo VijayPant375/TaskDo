@@ -56,6 +56,7 @@ import {
   createAuthenticatedBrowserSession,
   rotateAuthenticatedBrowserSession,
 } from './lib/browserAuth.js';
+import { getServiceEnvValue } from './lib/runtimeConfig.js';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const serverDirectory = path.dirname(currentFilePath);
@@ -67,7 +68,7 @@ const envFilePath = envFileCandidates.find((candidate) => fs.existsSync(candidat
 
 dotenv.config(envFilePath ? { path: envFilePath } : undefined);
 
-const configuredRedisUrl = process.env.REDIS_URL?.trim();
+const configuredRedisUrl = getServiceEnvValue('REDIS_URL', 'INTERNAL_REDIS_URL');
 
 if (!configuredRedisUrl) {
   console.warn(
@@ -84,10 +85,9 @@ const jwtAccessSecret = getRequiredEnv('JWT_ACCESS_SECRET');
 const jwtRefreshSecret = getRequiredEnv('JWT_REFRESH_SECRET');
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+console.log("GOOGLE_REDIRECT_URI =", process.env.GOOGLE_REDIRECT_URI);
 const googleRedirectUri =
-  process.env.GOOGLE_CALLBACK_URL ??
-  process.env.GOOGLE_REDIRECT_URI ??
-  `http://localhost:${port}/api/auth/google/callback`;
+  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/auth/google/callback';
 const isGoogleOAuthConfigured = Boolean(googleClientId && googleClientSecret);
 const cookieSecure = process.env.COOKIE_SECURE?.trim().toLowerCase();
 const secureCookies =
@@ -580,14 +580,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
 app.use(
   cors({
     credentials: true,
-    origin: (origin, callback) => {
-      if (!origin || allowedFrontendOrigins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin} is not allowed by CORS.`));
-    },
+    origin: true
   })
 );
 app.use(express.json());
