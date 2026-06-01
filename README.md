@@ -2,7 +2,7 @@
 
 # ✅ TaskDo — Enterprise-Grade Task Management Platform
 
-**A full-stack, production-ready task management application with authentication, cloud sync, and premium features.**
+**A full-stack, production-ready task management application with authentication, cloud sync, premium features, and self-healing AWS infrastructure.**
 
 [![React](https://img.shields.io/badge/React-18.3.1-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.2-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
@@ -10,6 +10,7 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Database-47A248?style=flat-square&logo=mongodb&logoColor=white)](https://www.mongodb.com)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=flat-square&logo=docker&logoColor=white)](https://www.docker.com)
 [![Kubernetes](https://img.shields.io/badge/Kubernetes-Ready-326CE5?style=flat-square&logo=kubernetes&logoColor=white)](https://kubernetes.io)
+[![AWS](https://img.shields.io/badge/AWS-Cloud_Infrastructure-FF9900?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com)
 
 </div>
 
@@ -19,7 +20,7 @@
 
 **TaskDo** is a production-grade, full-stack task management platform built for scalability, security, and user experience. Unlike simple todo apps, TaskDo provides enterprise-level features including secure authentication, cloud synchronization, subscription management, two-factor authentication, and comprehensive deployment options.
 
-The application is containerized with Docker, supports Kubernetes orchestration, and can be deployed on cloud platforms like Render with zero configuration.
+The application is containerized with Docker, supports Kubernetes orchestration, and is backed by a **self-healing AWS cloud infrastructure** — with Redis hosted on AWS EC2 managed by an Auto Scaling Group that automatically replaces failed instances without manual intervention.
 
 ---
 
@@ -48,7 +49,7 @@ The application is containerized with Docker, supports Kubernetes orchestration,
 - **Subscription Caching**: Redis-backed subscription state for performance
 
 ### ⚡ Performance & Scalability
-- **Redis Caching**: Session and subscription data cached for speed
+- **Redis Caching**: Session and subscription data cached on a dedicated AWS EC2 instance
 - **MongoDB Database**: Scalable NoSQL storage with indexing
 - **Horizontal Pod Autoscaling**: Kubernetes HPA configuration included
 - **Health Checks**: Comprehensive health monitoring endpoints
@@ -82,7 +83,13 @@ TaskDo follows a modern microservices-inspired architecture with clear separatio
           ▼              ▼              ▼
 ┌─────────────────────────────────────────────────────┐
 │              Data & Cache Layer                      │
-│  MongoDB (Persistent) │ Redis (Session/Cache)       │
+│  MongoDB (Persistent) │ Redis on AWS EC2 (Cache)    │
+└─────────────────────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────┐
+│             AWS Cloud Infrastructure                 │
+│  Auto Scaling Group │ AMI │ Launch Template         │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -100,8 +107,89 @@ Controller Logic (authController.ts)
     ↓
 Database Operations (store.ts)
     ↓
-MongoDB/Redis Storage
+MongoDB (Persistent Storage) / Redis on AWS EC2 (Cache)
 ```
+
+---
+
+## ☁️ Cloud Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        TaskDo Cloud Architecture                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   ┌──────────────────┐         ┌──────────────────────────────┐     │
+│   │  React Frontend  │────────▶│  Node.js / Express Backend   │     │
+│   │  (Render / CDN)  │         │        (Render)               │     │
+│   └──────────────────┘         └──────────────┬───────────────┘     │
+│                                               │                      │
+│                          ┌────────────────────┼─────────────────┐   │
+│                          ▼                    ▼                  ▼   │
+│               ┌──────────────────┐  ┌─────────────────┐             │
+│               │  MongoDB Atlas   │  │  Redis Cache    │             │
+│               │  (Persistent DB) │  │  (AWS EC2)      │             │
+│               └──────────────────┘  └────────┬────────┘             │
+│                                              │                       │
+│                          ┌───────────────────▼───────────────────┐  │
+│                          │         AWS Auto Scaling Group         │  │
+│                          │  ┌─────────────────────────────────┐  │  │
+│                          │  │  Desired: 1 │ Min: 1 │ Max: 1   │  │  │
+│                          │  └─────────────────────────────────┘  │  │
+│                          │           ▲               ▲            │  │
+│                          │    ┌──────┴──────┐ ┌──────┴──────┐   │  │
+│                          │    │  AMI Snapshot│ │Launch Template│  │  │
+│                          │    │ (Redis Config)│ │(Instance Type │  │  │
+│                          │    │              │ │ + SG + Keys)  │  │  │
+│                          │    └─────────────┘ └─────────────┘   │  │
+│                          └───────────────────────────────────────┘  │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛡️ High Availability & Cloud Infrastructure
+
+TaskDo's caching layer is hosted on **AWS EC2** and managed by a **self-healing Auto Scaling Group**, making the infrastructure resilient to failures without any manual intervention.
+
+### 🔴 Redis on AWS EC2
+
+- Redis is deployed on a dedicated EC2 instance rather than a shared container, giving it isolated compute resources and stable network identity.
+- The backend connects to the Redis instance via its cloud-hosted endpoint, using it as a high-performance caching layer between Express and MongoDB.
+- Redis caches JWT session data, subscription status, and frequently-accessed records to reduce database load and improve response times.
+
+### 🔄 Auto Scaling Group (ASG)
+
+| Parameter | Value |
+|-----------|-------|
+| **Desired Capacity** | 1 |
+| **Minimum Capacity** | 1 |
+| **Maximum Capacity** | 1 |
+
+The ASG continuously monitors the health of the Redis EC2 instance. If the instance becomes unhealthy or is terminated, AWS automatically provisions a replacement using the stored AMI and Launch Template — no manual recovery required.
+
+### 🖼️ Amazon Machine Image (AMI)
+
+The Redis server configuration — including installed packages, configuration files, and startup settings — is captured as a custom AMI. When the ASG needs to launch a replacement instance, it uses this AMI to guarantee the new server is production-ready from the first boot.
+
+### 📋 Launch Template
+
+A dedicated AWS Launch Template standardizes every Redis EC2 instance with the following:
+
+- **Instance Type**: Configured for Redis workload requirements
+- **AMI**: Points to the custom Redis AMI
+- **Security Groups**: Network rules restricting Redis port access to the backend only
+- **Key Pair**: SSH access for authorized administrators
+- **Networking**: VPC subnet and availability zone settings
+
+### ✅ Fault Tolerance Demonstration
+
+The self-healing capability was validated by manually terminating the Redis EC2 instance and observing the Auto Scaling Group automatically launch a fresh replacement. The backend reconnected without any code changes or operator intervention, confirming production-grade resilience.
+
+### 💡 Cost Optimization
+
+Using a desired/min/max capacity of **1/1/1** ensures exactly one Redis instance is always running — no over-provisioning, no under-provisioning. This is ideal for a production workload where Redis is a single-point caching layer and cost control matters.
 
 ---
 
@@ -144,6 +232,11 @@ MongoDB/Redis Storage
 | **Nginx** | Reverse proxy and static file serving |
 | **Render** | Cloud deployment platform |
 | **GitHub Actions** | CI/CD (via Render auto-deploy) |
+| **AWS EC2** | Dedicated Redis cache hosting |
+| **AWS Auto Scaling Groups** | Self-healing instance management |
+| **Amazon Machine Images (AMI)** | Reproducible server snapshots |
+| **AWS Launch Templates** | Standardized instance provisioning |
+| **AWS Security Groups** | Network access control |
 
 ---
 
@@ -154,7 +247,7 @@ MongoDB/Redis Storage
 - **Node.js** v18 or higher
 - **npm** or **yarn**
 - **MongoDB** (local or Atlas)
-- **Redis** (optional, for caching)
+- **Redis** (local, Docker, or AWS EC2)
 - **Docker & Docker Compose** (for containerized deployment)
 
 ### Local Development
@@ -207,6 +300,8 @@ NODE_ENV=development
 docker run -d -p 27017:27017 --name taskdo-mongo mongo:7
 docker run -d -p 6379:6379 --name taskdo-redis redis:7-alpine
 ```
+
+> **Production Note:** In production, `REDIS_URL` points to the AWS EC2-hosted Redis instance managed by the Auto Scaling Group.
 
 5. **Run the application**
 ```bash
@@ -319,6 +414,7 @@ git push origin main
 3. **Configure environment variables**
 Add these in the Render dashboard:
 - `MONGO_URI`
+- `REDIS_URL` *(point to your AWS EC2 Redis endpoint)*
 - `JWT_ACCESS_SECRET`
 - `JWT_REFRESH_SECRET`
 - `ENCRYPTION_KEY`
@@ -377,7 +473,7 @@ Taskdo/
 │   │   ├── cookies.ts           # Cookie management
 │   │   ├── db.ts                # MongoDB connection
 │   │   ├── env.ts               # Environment validation
-│   │   ├── redis.ts             # Redis caching
+│   │   ├── redis.ts             # Redis caching (AWS EC2)
 │   │   ├── store.ts             # Data access layer
 │   │   └── tokens.ts            # JWT and crypto utilities
 │   ├── middleware/               # Express middleware
@@ -500,6 +596,11 @@ GET    /api/health               # Health check endpoint
    - Request validation and sanitization
    - MongoDB injection prevention
 
+6. **Cloud Network Security**
+   - AWS Security Groups restrict Redis port access to backend services only
+   - No public internet exposure to the Redis EC2 instance
+   - SSH key-pair access for administrative operations
+
 ---
 
 ## 💰 Subscription Tiers
@@ -524,6 +625,9 @@ GET    /api/health               # Health check endpoint
 - [x] Docker containerization
 - [x] Two-factor authentication
 - [x] Stripe payment integration
+- [x] AWS EC2 Redis deployment
+- [x] Auto Scaling Group & self-healing infrastructure
+- [x] AMI + Launch Template provisioning
 
 ### Phase 2: Advanced Features 🚧
 - [ ] Task categories and tags
@@ -574,6 +678,7 @@ npm run test:coverage
 - **Request Logging**: Express middleware for API request tracking
 - **Error Handling**: Centralized error handling with stack traces
 - **Performance Metrics**: Redis cache hit rates and response times
+- **AWS CloudWatch**: EC2 instance health and Auto Scaling Group events
 
 ---
 
@@ -595,9 +700,9 @@ Contributions are welcome! Please follow these guidelines:
 - Update documentation as needed
 - Ensure Docker builds succeed
 - Verify Kubernetes manifests
+- Follow AWS security best practices for any infrastructure changes
 
 ---
-
 
 <div align="center">
 
