@@ -532,7 +532,12 @@ export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
       <SubscriptionProvider>
-        <AppContent />
+        <div className="flex min-h-screen flex-col">
+          <AppContent />
+          <footer className="w-full border-t border-border/40 bg-muted/20 py-3 text-center text-xs text-muted-foreground">
+            Built with ⚡ by <span className="font-medium text-foreground">Vijay Pant</span> <span className="mx-1.5 text-muted-foreground/40">|</span> TaskDo © {new Date().getFullYear()}
+          </footer>
+        </div>
       </SubscriptionProvider>
     </ThemeProvider>
   );
