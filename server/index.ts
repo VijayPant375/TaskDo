@@ -1114,6 +1114,8 @@ async function startServer() {
   });
 }
 
+export { app };
+
 startServer().catch((error) => {
   console.error('Failed to start TaskDo server.', error);
   process.exit(1);
