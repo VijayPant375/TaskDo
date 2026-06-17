@@ -222,6 +222,7 @@ Using a desired/min/max capacity of **1/1/1** ensures exactly one Redis instance
 | **Stripe API** | Payment processing |
 | **cors** | Cross-origin resource sharing |
 | **express-rate-limit** | API rate limiting |
+| **Jest + Supertest** | Integration testing |
 
 ### DevOps & Deployment
 | Technology | Purpose |
@@ -231,7 +232,7 @@ Using a desired/min/max capacity of **1/1/1** ensures exactly one Redis instance
 | **Kubernetes** | Production orchestration |
 | **Nginx** | Reverse proxy and static file serving |
 | **Render** | Cloud deployment platform |
-| **GitHub Actions** | CI/CD (via Render auto-deploy) |
+| **GitHub Actions** | CI/CD pipeline with automated tests + Render auto-deploy |
 | **AWS EC2** | Dedicated Redis cache hosting |
 | **AWS Auto Scaling Groups** | Self-healing instance management |
 | **Amazon Machine Images (AMI)** | Reproducible server snapshots |
@@ -655,6 +656,19 @@ GET    /api/health               # Health check endpoint
 ---
 
 ## 🧪 Testing
+
+The backend includes an integration test suite covering critical auth and task CRUD routes.
+
+- **Framework:** Jest + Supertest
+- **Coverage:** 15 tests across auth flows (signup, login, session) and task routes (list, create, update, delete, validation)
+- **Approach:** MongoDB layer is fully mocked for fast, isolated runs — no live database required
+- **CI:** Tests run automatically on every push via GitHub Actions
+
+To run tests locally:
+```bash
+cd server
+npm test
+```
 
 ```bash
 # Run frontend tests
