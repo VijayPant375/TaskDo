@@ -1116,7 +1116,11 @@ async function startServer() {
 
 export { app };
 
-startServer().catch((error) => {
-  console.error('Failed to start TaskDo server.', error);
-  process.exit(1);
-});
+const isMainModule = path.resolve(process.argv[1] ?? '') === path.resolve(currentFilePath);
+
+if (isMainModule) {
+  startServer().catch((error) => {
+    console.error('Failed to start TaskDo server.', error);
+    process.exit(1);
+  });
+}
